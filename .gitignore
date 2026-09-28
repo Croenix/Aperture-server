@@ -1,0 +1,19 @@
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment secrets
+.env
+.env.local
+.env.*.local
+
+# Storage directory (file uploads and sqlite database)
+storage/
+!storage/.gitkeep
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
