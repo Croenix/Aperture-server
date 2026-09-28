@@ -37,7 +37,14 @@ A high-performance, production-ready file upload API and web interface built wit
 2. [Environment Configuration](#environment-configuration)
 3. [Server Startup](#server-startup)
 4. [API Authentication & Permission Scopes](#api-authentication--permission-scopes)
-5. [API Endpoints & cURL Examples](#api-endpoints--curl-examples)
+5. [Presets & Two-Level Category System](#presets--two-level-category-system)
+   - [Get Image Presets Only (`GET /api/presets/image`)](#get-image-presets-only)
+   - [Get Text Presets Only (`GET /api/presets/text`)](#get-text-presets-only)
+   - [Get Category Hierarchy (`GET /api/presets/categories`)](#get-category-hierarchy)
+   - [Get Grouped Presets (`GET /api/presets`)](#get-grouped-presets)
+   - [Edit Preset (`PATCH /api/presets/:id`)](#edit-preset)
+   - [Delete Preset (`DELETE /api/presets/:id`)](#delete-preset)
+6. [API Endpoints & cURL Examples](#api-endpoints--curl-examples)
    - [Upload File](#1-upload-file)
    - [Get File Metadata](#2-get-file-metadata)
    - [Download File](#3-download-file)
@@ -46,10 +53,10 @@ A high-performance, production-ready file upload API and web interface built wit
    - [List Files (Paginated)](#6-list-files-paginated)
    - [Health Check](#7-health-check)
    - [API Key Management](#8-api-key-management)
-6. [Error Response Format & Error Codes](#error-response-format--error-codes)
-7. [Modular Storage Architecture (Local & Cloud S3)](#modular-storage-architecture)
-8. [Mobile Integration (Android / iOS)](#mobile-integration)
-9. [Production Deployment Instructions](#production-deployment-instructions)
+7. [Error Response Format & Error Codes](#error-response-format--error-codes)
+8. [Modular Storage Architecture (Local & Cloud S3)](#modular-storage-architecture)
+9. [Mobile Integration (Android / iOS)](#mobile-integration)
+10. [Production Deployment Instructions](#production-deployment-instructions)
 
 ---
 
@@ -136,6 +143,137 @@ Authorization: Bearer YOUR_API_KEY
 | **Master Admin** | `aperture_adm_secret_key_2026` | `files:read`, `files:upload`, `files:delete`, `files:manage` |
 | **Upload Service** | `aperture_upl_secret_key_2026` | `files:read`, `files:upload` |
 | **Read Only** | `aperture_ro_secret_key_2026` | `files:read` |
+
+---
+
+## 🎨 Presets & Two-Level Category System
+
+The system provides a two-level hierarchical classification system designed for presets:
+1. **Main Category**:
+   - `image` (`Image Preset`): Pre-seeded with subcategories: `Vintage`, `Modern`, `Black & White`, `Cinematic`, `Portrait`, `Landscape`, `Moody`, `Warm Tones`, `Cool Tones`, `Cyberpunk`, plus user-defined subcategories.
+   - `text` (`Text Preset`): Empty by default, allows adding any custom text preset subcategories.
+2. **Sub Category**:
+   - Specific style or grouping within the main category.
+
+---
+
+### Get Image Presets Only
+
+```bash
+# Get all image presets
+curl -X GET http://localhost:3000/api/presets/image
+
+# Filter image presets by subcategory (e.g. Vintage)
+curl -X GET http://localhost:3000/api/presets/image/Vintage
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "mainCategory": "image",
+  "count": 1,
+  "subCategories": ["Vintage"],
+  "presets": [
+    {
+      "id": "f_c11d0a6c3916",
+      "title": "Amber Sunset LUT",
+      "mainCategory": "image",
+      "subCategory": "Vintage",
+      "category": "Vintage",
+      "fileUrl": "http://localhost:3000/files/f_c11d0a6c3916",
+      "downloadUrl": "http://localhost:3000/files/f_c11d0a6c3916/download",
+      "viewUrl": "http://localhost:3000/files/f_c11d0a6c3916/view",
+      "fileName": "amber_sunset.cube",
+      "fileSize": 118086,
+      "sizeFormatted": "115.32 KB",
+      "uploadedAt": "2026-09-28T20:23:16.336Z"
+    }
+  ],
+  "grouped": {
+    "Vintage": [ /* preset objects */ ]
+  }
+}
+```
+
+---
+
+### Get Text Presets Only
+
+```bash
+# Get all text presets
+curl -X GET http://localhost:3000/api/presets/text
+
+# Filter text presets by subcategory (e.g. Quotes)
+curl -X GET http://localhost:3000/api/presets/text/Quotes
+```
+
+---
+
+### Get Category Hierarchy
+
+Returns available preset styles and dynamic subcategories for both `image` and `text`:
+
+```bash
+curl -X GET http://localhost:3000/api/presets/categories
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "categories": {
+    "image": [
+      "Vintage",
+      "Modern",
+      "Black & White",
+      "Cinematic",
+      "Portrait",
+      "Landscape",
+      "Moody",
+      "Warm Tones",
+      "Cool Tones",
+      "Cyberpunk"
+    ],
+    "text": [
+      "Quotes",
+      "Captions"
+    ]
+  }
+}
+```
+
+---
+
+### Get Grouped Presets
+
+```bash
+curl -X GET http://localhost:3000/api/presets
+```
+
+---
+
+### Edit Preset
+
+Update title, main category, and subcategory for any preset:
+
+```bash
+curl -X PATCH http://localhost:3000/api/presets/f_c11d0a6c3916 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Moody Forest Glow",
+    "mainCategory": "image",
+    "subCategory": "Moody"
+  }'
+```
+
+---
+
+### Delete Preset
+
+```bash
+curl -X DELETE http://localhost:3000/api/presets/f_c11d0a6c3916
+```
 
 ---
 

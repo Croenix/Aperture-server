@@ -1,10 +1,23 @@
 /**
  * APERTURE FILE SERVER - FRONTEND CONTROLLER
- * Vanilla JavaScript UI & REST API Client with Edit & Remove Preset support
+ * Two-level Hierarchical Category System (Main: Image / Text, Sub: Vintage, Modern, B&W, etc.)
  */
 
 (function () {
   'use strict';
+
+  const DEFAULT_IMAGE_SUBCATEGORIES = [
+    'Vintage',
+    'Modern',
+    'Black & White',
+    'Cinematic',
+    'Portrait',
+    'Landscape',
+    'Moody',
+    'Warm Tones',
+    'Cool Tones',
+    'Cyberpunk'
+  ];
 
   // Application State
   const state = {
@@ -15,8 +28,13 @@
     keyName: sessionStorage.getItem('aperture_key_name') || 'Upload Key Active',
     currentPage: 1,
     searchQuery: '',
-    selectedCategory: 'all',
-    totalPages: 1
+    selectedMainFilter: 'all',
+    selectedSubFilter: 'all',
+    totalPages: 1,
+    categoriesTree: {
+      image: [...DEFAULT_IMAGE_SUBCATEGORIES],
+      text: []
+    }
   };
 
   // DOM Elements
@@ -37,10 +55,14 @@
     clearSelectedBtn: document.getElementById('clear-selected-btn'),
     startUploadBtn: document.getElementById('start-upload-btn'),
 
-    // Title & Category Inputs (Upload)
+    // Upload Meta Form (Two-Level Categories)
     customTitleInput: document.getElementById('custom-title-input'),
-    customCategorySelect: document.getElementById('custom-category-select'),
-    customCategoryInput: document.getElementById('custom-category-input'),
+    uploadMainCategory: document.getElementById('upload-main-category'),
+    toggleCatImage: document.getElementById('toggle-cat-image'),
+    toggleCatText: document.getElementById('toggle-cat-text'),
+    customSubcategorySelect: document.getElementById('custom-subcategory-select'),
+    customSubcategoryInput: document.getElementById('custom-subcategory-input'),
+    subcategoryLabelHint: document.getElementById('subcategory-label-hint'),
 
     // Uploading State Elements
     uploadingFileName: document.getElementById('uploading-file-name'),
@@ -52,7 +74,8 @@
 
     // Success State Elements
     successTitle: document.getElementById('success-title'),
-    successCategory: document.getElementById('success-category'),
+    successMainCategory: document.getElementById('success-main-category'),
+    successSubCategory: document.getElementById('success-sub-category'),
     successFilename: document.getElementById('success-filename'),
     successFilesize: document.getElementById('success-filesize'),
     successFileid: document.getElementById('success-fileid'),
@@ -73,6 +96,7 @@
     // Explorer / File Manager
     filesTableBody: document.getElementById('files-table-body'),
     fileSearchInput: document.getElementById('file-search-input'),
+    mainCategoryFilterSelect: document.getElementById('main-category-filter-select'),
     categoryFilterSelect: document.getElementById('category-filter-select'),
     refreshFilesBtn: document.getElementById('refresh-files-btn'),
     fileTotalCount: document.getElementById('file-total-count'),
@@ -87,8 +111,9 @@
     saveEditBtn: document.getElementById('save-edit-btn'),
     editFileId: document.getElementById('edit-file-id'),
     editFileTitle: document.getElementById('edit-file-title'),
-    editFileCategorySelect: document.getElementById('edit-file-category-select'),
-    editFileCategoryCustom: document.getElementById('edit-file-category-custom'),
+    editFileMainCategory: document.getElementById('edit-file-main-category'),
+    editFileSubcategorySelect: document.getElementById('edit-file-subcategory-select'),
+    editFileSubcategoryCustom: document.getElementById('edit-file-subcategory-custom'),
 
     // Auth & Docs Modals
     authConfigBtn: document.getElementById('auth-config-btn'),
@@ -110,7 +135,7 @@
 
   // Utility: Format bytes
   function formatBytes(bytes, decimals = 2) {
-    if (bytes === 0) return '0 Bytes';
+    if (!bytes || bytes === 0) return '0 Bytes';
     const k = 1024;
     const dm = decimals < 0 ? 0 : decimals;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
@@ -201,6 +226,65 @@
     }
   }
 
+  // Populate dynamic subcategory options for a given main category and target select element
+  function populateSubcategorySelect(selectEl, customInputEl, mainCategory, currentSub = '') {
+    selectEl.innerHTML = '';
+
+    const list = (mainCategory === 'image')
+      ? (state.categoriesTree.image || DEFAULT_IMAGE_SUBCATEGORIES)
+      : (state.categoriesTree.text || []);
+
+    if (list && list.length > 0) {
+      list.forEach(sub => {
+        const opt = document.createElement('option');
+        opt.value = sub;
+        opt.textContent = sub;
+        if (currentSub && currentSub.toLowerCase() === sub.toLowerCase()) {
+          opt.selected = true;
+        }
+        selectEl.appendChild(opt);
+      });
+    }
+
+    // Add option to type custom subcategory
+    const customOpt = document.createElement('option');
+    customOpt.value = '__custom__';
+    customOpt.textContent = (list.length === 0) ? '+ Add Subcategory (Required)' : '+ Enter Custom Subcategory...';
+    selectEl.appendChild(customOpt);
+
+    // If list is empty, default select custom and show input
+    if (list.length === 0 || (currentSub && !list.some(s => s.toLowerCase() === currentSub.toLowerCase()))) {
+      selectEl.value = '__custom__';
+      customInputEl.classList.remove('hidden');
+      if (currentSub) {
+        customInputEl.value = currentSub;
+      }
+    } else {
+      if (!currentSub) {
+        selectEl.selectedIndex = 0;
+      }
+      customInputEl.classList.add('hidden');
+    }
+  }
+
+  // Handle Main Category Switch in Upload Form
+  function setUploadMainCategory(mainCategory) {
+    state.uploadMainCategory = mainCategory;
+    elements.uploadMainCategory.value = mainCategory;
+
+    if (mainCategory === 'image') {
+      elements.toggleCatImage.classList.add('active');
+      elements.toggleCatText.classList.remove('active');
+      elements.subcategoryLabelHint.textContent = '(Select image preset style or add custom)';
+    } else {
+      elements.toggleCatText.classList.add('active');
+      elements.toggleCatImage.classList.remove('active');
+      elements.subcategoryLabelHint.textContent = '(Enter or select text preset subcategory)';
+    }
+
+    populateSubcategorySelect(elements.customSubcategorySelect, elements.customSubcategoryInput, mainCategory);
+  }
+
   // Handle File Selection
   function handleFileSelected(file) {
     if (!file) return;
@@ -211,18 +295,15 @@
     const cleanTitle = baseName.replace(/[-_]+/g, ' ').trim();
     elements.customTitleInput.value = cleanTitle;
 
-    // Auto-select category if .apx or firmware
+    // Auto-detect image vs text based on mime / extension
     const ext = file.name.split('.').pop().toLowerCase();
-    if (ext === 'apx' || ext === 'bin' || ext === 'hex') {
-      elements.customCategorySelect.value = 'firmware';
-    } else if (['json', 'yaml', 'yml', 'xml', 'ini', 'env', 'conf'].includes(ext)) {
-      elements.customCategorySelect.value = 'config';
-    } else if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(ext)) {
-      elements.customCategorySelect.value = 'documents';
+    const isTextFile = ['txt', 'json', 'md', 'xml', 'csv', 'yaml', 'yml', 'js', 'html', 'css'].includes(ext);
+
+    if (isTextFile) {
+      setUploadMainCategory('text');
     } else {
-      elements.customCategorySelect.value = 'general';
+      setUploadMainCategory('image');
     }
-    elements.customCategoryInput.classList.add('hidden');
 
     switchState('ready');
   }
@@ -234,20 +315,28 @@
       return;
     }
 
+    const mainCategory = elements.uploadMainCategory.value || 'image';
+    let subCategory = elements.customSubcategorySelect.value;
+    if (subCategory === '__custom__') {
+      subCategory = elements.customSubcategoryInput.value.trim();
+      if (!subCategory) {
+        showToast('Please enter a subcategory name.', 'error');
+        elements.customSubcategoryInput.focus();
+        return;
+      }
+    }
+
     switchState('uploading');
     state.uploadStartTime = Date.now();
 
     const formData = new FormData();
     formData.append('file', state.currentFile);
 
-    // Append custom title & category
     const title = elements.customTitleInput.value.trim() || state.currentFile.name;
-    let category = elements.customCategorySelect.value;
-    if (category === '__custom__') {
-      category = elements.customCategoryInput.value.trim() || 'general';
-    }
     formData.append('title', title);
-    formData.append('category', category);
+    formData.append('mainCategory', mainCategory);
+    formData.append('subCategory', subCategory);
+    formData.append('category', subCategory);
 
     const xhr = new XMLHttpRequest();
     state.activeXhr = xhr;
@@ -260,7 +349,6 @@
         elements.uploadPercentage.textContent = `${percent}%`;
         elements.uploadBytes.textContent = `${formatBytes(e.loaded)} / ${formatBytes(e.total)}`;
 
-        // Calculate upload speed
         const elapsedSec = (Date.now() - state.uploadStartTime) / 1000;
         if (elapsedSec > 0.3) {
           const bytesPerSec = e.loaded / elapsedSec;
@@ -288,26 +376,28 @@
 
       if (xhr.status >= 200 && xhr.status < 300 && response && response.success) {
         const file = response.file;
+        const isImg = (file.mainCategory || 'image') === 'image';
+
         // Populate Success State
         elements.successTitle.textContent = file.title || file.originalName;
-        elements.successCategory.innerHTML = `<span class="badge badge-category badge-cat-${escapeHtml(file.category)}">${escapeHtml(file.category)}</span>`;
+        elements.successMainCategory.innerHTML = `<span class="badge ${isImg ? 'badge-main-image' : 'badge-main-text'}">${isImg ? 'Image Preset' : 'Text Preset'}</span>`;
+        elements.successSubCategory.innerHTML = `<span class="badge badge-subcategory">${escapeHtml(file.subCategory || file.category || 'General')}</span>`;
         elements.successFilename.textContent = file.originalName;
         elements.successFilesize.textContent = formatBytes(file.size);
         elements.successFileid.textContent = file.id;
         elements.successMimetype.textContent = file.mimeType;
         elements.successTimestamp.textContent = formatTimestamp(file.uploadedAt);
-        elements.successFileUrl.value = file.url;
+        elements.successFileUrl.value = file.fileUrl || file.url;
         elements.successApiUrl.value = file.apiUrl;
 
-        elements.successViewLink.href = `${file.url}/view`;
-        elements.successDownloadLink.href = `${file.url}/download`;
+        elements.successViewLink.href = file.viewUrl || `${file.url}/view`;
+        elements.successDownloadLink.href = file.downloadUrl || `${file.url}/download`;
 
         switchState('success');
         showToast('Preset uploaded successfully!', 'success');
-        fetchFilesList();
         fetchCategories();
+        fetchFilesList();
       } else {
-        // Populate Failure State
         const errorCode = response && response.error ? response.error.code : `HTTP_${xhr.status}`;
         const errorMsg = response && response.error ? response.error.message : 'An error occurred during upload.';
         
@@ -332,7 +422,6 @@
       switchState('ready');
     });
 
-    // Send Request
     xhr.open('POST', '/api/v1/files');
     if (state.apiKey) {
       xhr.setRequestHeader('Authorization', `Bearer ${state.apiKey.trim()}`);
@@ -348,28 +437,58 @@
     }
   }
 
-  // Fetch Categories for Filter Dropdown
+  // Fetch Categories Tree from /api/presets/categories
   async function fetchCategories() {
     try {
-      const headers = {};
-      if (state.apiKey) {
-        headers['Authorization'] = `Bearer ${state.apiKey.trim()}`;
-      }
-      const res = await fetch('/api/v1/files/categories', { headers });
+      const res = await fetch('/api/presets/categories');
       const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.categories)) {
-        const currentSelected = elements.categoryFilterSelect.value;
-        elements.categoryFilterSelect.innerHTML = '<option value="all">All Categories</option>';
-        data.categories.forEach(item => {
-          const opt = document.createElement('option');
-          opt.value = item.category;
-          opt.textContent = `${item.category.charAt(0).toUpperCase() + item.category.slice(1)} (${item.count})`;
-          elements.categoryFilterSelect.appendChild(opt);
-        });
-        elements.categoryFilterSelect.value = currentSelected || 'all';
+      if (res.ok && data.success && data.categories) {
+        state.categoriesTree.image = data.categories.image || DEFAULT_IMAGE_SUBCATEGORIES;
+        state.categoriesTree.text = data.categories.text || [];
+
+        // Refresh Subcategory filter dropdown in explorer
+        updateSubcategoryFilterDropdown();
+
+        // Refresh upload subcategory picker
+        populateSubcategorySelect(
+          elements.customSubcategorySelect,
+          elements.customSubcategoryInput,
+          elements.uploadMainCategory.value || 'image'
+        );
       }
     } catch (err) {
       // Non-blocking
+    }
+  }
+
+  // Update Explorer Subcategory Filter dropdown based on current selected Main Category filter
+  function updateSubcategoryFilterDropdown() {
+    const currentSub = state.selectedSubFilter;
+    elements.categoryFilterSelect.innerHTML = '<option value="all">All Subcategories</option>';
+
+    let subList = [];
+    if (state.selectedMainFilter === 'image') {
+      subList = state.categoriesTree.image || [];
+    } else if (state.selectedMainFilter === 'text') {
+      subList = state.categoriesTree.text || [];
+    } else {
+      const allSub = new Set([...(state.categoriesTree.image || []), ...(state.categoriesTree.text || [])]);
+      subList = Array.from(allSub);
+    }
+
+    subList.forEach(sub => {
+      const opt = document.createElement('option');
+      opt.value = sub;
+      opt.textContent = sub;
+      if (currentSub === sub) {
+        opt.selected = true;
+      }
+      elements.categoryFilterSelect.appendChild(opt);
+    });
+
+    if (currentSub && !subList.includes(currentSub)) {
+      state.selectedSubFilter = 'all';
+      elements.categoryFilterSelect.value = 'all';
     }
   }
 
@@ -382,8 +501,11 @@
       if (state.searchQuery) {
         url.searchParams.set('search', state.searchQuery);
       }
-      if (state.selectedCategory && state.selectedCategory !== 'all') {
-        url.searchParams.set('category', state.selectedCategory);
+      if (state.selectedMainFilter && state.selectedMainFilter !== 'all') {
+        url.searchParams.set('mainCategory', state.selectedMainFilter);
+      }
+      if (state.selectedSubFilter && state.selectedSubFilter !== 'all') {
+        url.searchParams.set('subCategory', state.selectedSubFilter);
       }
 
       const headers = {};
@@ -400,7 +522,7 @@
         renderEmptyTable(data.error ? data.error.message : 'Failed to fetch files');
       }
     } catch (err) {
-      renderEmptyTable('Could not connect to files API');
+      renderEmptyTable('Could not connect to presets API');
     }
   }
 
@@ -413,14 +535,19 @@
     elements.nextPageBtn.disabled = pagination.page >= pagination.totalPages;
 
     if (!files || files.length === 0) {
-      renderEmptyTable('No presets found. Upload your first preset above!');
+      renderEmptyTable('No presets found matching your filter. Upload your first preset above!');
       return;
     }
 
     elements.filesTableBody.innerHTML = '';
     files.forEach(file => {
       const tr = document.createElement('tr');
-      const catClass = `badge-cat-${escapeHtml(file.category || 'general')}`;
+      const isImg = (file.mainCategory || 'image') === 'image';
+      const mainBadge = isImg
+        ? `<span class="badge badge-main-image">Image Preset</span>`
+        : `<span class="badge badge-main-text">Text Preset</span>`;
+      const subCategory = file.subCategory || file.category || 'General';
+
       tr.innerHTML = `
         <td>
           <div class="file-name-cell">
@@ -434,8 +561,9 @@
             </div>
           </div>
         </td>
+        <td>${mainBadge}</td>
         <td>
-          <span class="badge badge-category ${catClass}">${escapeHtml(file.category || 'general')}</span>
+          <span class="badge badge-subcategory">${escapeHtml(subCategory)}</span>
         </td>
         <td><span class="font-mono text-cyan">${escapeHtml(file.id)}</span></td>
         <td>${formatBytes(file.size)}</td>
@@ -446,8 +574,9 @@
             <button class="btn btn-glass btn-sm table-edit-btn" 
               data-id="${escapeHtml(file.id)}" 
               data-title="${escapeHtml(file.title || file.originalName)}" 
-              data-category="${escapeHtml(file.category || 'general')}" 
-              title="Edit Preset Title & Category">
+              data-main="${escapeHtml(file.mainCategory || 'image')}"
+              data-sub="${escapeHtml(subCategory)}" 
+              title="Edit Preset">
               <svg class="icon-sm text-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -459,7 +588,7 @@
             <a href="${file.url}/download" class="btn btn-glass btn-sm" title="Download Preset">
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             </a>
-            <button class="btn btn-glass btn-sm table-copy-btn" data-copy="${escapeHtml(file.url)}" title="Copy Direct URL">
+            <button class="btn btn-glass btn-sm table-copy-btn" data-copy="${escapeHtml(file.fileUrl || file.url)}" title="Copy Direct URL">
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             </button>
             <button class="btn btn-glass btn-sm table-delete-btn" data-id="${escapeHtml(file.id)}" title="Remove Preset">
@@ -471,42 +600,26 @@
       elements.filesTableBody.appendChild(tr);
     });
 
-    // Attach row edit listeners
+    // Row Edit Listeners
     document.querySelectorAll('.table-edit-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const fileId = btn.getAttribute('data-id');
         const title = btn.getAttribute('data-title');
-        const category = btn.getAttribute('data-category');
+        const mainCat = btn.getAttribute('data-main') || 'image';
+        const subCat = btn.getAttribute('data-sub') || 'General';
 
         elements.editFileId.value = fileId;
         elements.editFileTitle.value = title;
+        elements.editFileMainCategory.value = mainCat;
 
-        // Check if category is standard option
-        let found = false;
-        for (let i = 0; i < elements.editFileCategorySelect.options.length; i++) {
-          if (elements.editFileCategorySelect.options[i].value.toLowerCase() === category.toLowerCase()) {
-            elements.editFileCategorySelect.selectedIndex = i;
-            found = true;
-            break;
-          }
-        }
-
-        if (!found) {
-          elements.editFileCategorySelect.value = '__custom__';
-          elements.editFileCategoryCustom.value = category;
-          elements.editFileCategoryCustom.classList.remove('hidden');
-        } else {
-          elements.editFileCategoryCustom.classList.add('hidden');
-          elements.editFileCategoryCustom.value = '';
-        }
-
+        populateSubcategorySelect(elements.editFileSubcategorySelect, elements.editFileSubcategoryCustom, mainCat, subCat);
         elements.editModal.classList.remove('hidden');
       });
     });
 
-    // Attach row copy listeners
+    // Row Copy Listeners
     document.querySelectorAll('.table-copy-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         const text = btn.getAttribute('data-copy');
         navigator.clipboard.writeText(text).then(() => {
           showToast('Preset URL copied to clipboard!', 'success');
@@ -514,9 +627,9 @@
       });
     });
 
-    // Attach row delete listeners
+    // Row Delete Listeners
     document.querySelectorAll('.table-delete-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', async () => {
         const fileId = btn.getAttribute('data-id');
         if (confirm(`Are you sure you want to permanently remove preset '${fileId}'?`)) {
           await deleteFile(fileId);
@@ -528,7 +641,7 @@
   function renderEmptyTable(message) {
     elements.filesTableBody.innerHTML = `
       <tr>
-        <td colspan="6" class="empty-placeholder">
+        <td colspan="7" class="empty-placeholder">
           <div class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
             <p>${escapeHtml(message)}</p>
@@ -541,7 +654,7 @@
   // Delete / Remove File API Call
   async function deleteFile(fileId) {
     try {
-      const res = await fetch(`/api/v1/files/${fileId}`, {
+      const res = await fetch(`/api/presets/${fileId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${state.apiKey.trim()}`
@@ -564,9 +677,15 @@
   async function savePresetEdit() {
     const fileId = elements.editFileId.value;
     const newTitle = elements.editFileTitle.value.trim();
-    let newCategory = elements.editFileCategorySelect.value;
-    if (newCategory === '__custom__') {
-      newCategory = elements.editFileCategoryCustom.value.trim() || 'general';
+    const newMain = elements.editFileMainCategory.value || 'image';
+    let newSub = elements.editFileSubcategorySelect.value;
+    if (newSub === '__custom__') {
+      newSub = elements.editFileSubcategoryCustom.value.trim();
+      if (!newSub) {
+        showToast('Please enter a subcategory name.', 'error');
+        elements.editFileSubcategoryCustom.focus();
+        return;
+      }
     }
 
     if (!newTitle) {
@@ -575,7 +694,7 @@
     }
 
     try {
-      const res = await fetch(`/api/v1/files/${fileId}`, {
+      const res = await fetch(`/api/presets/${fileId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -583,7 +702,9 @@
         },
         body: JSON.stringify({
           title: newTitle,
-          category: newCategory
+          mainCategory: newMain,
+          subCategory: newSub,
+          category: newSub
         })
       });
 
@@ -603,6 +724,55 @@
 
   // Setup Event Listeners
   function initEvents() {
+    // Main Category Toggles (Upload)
+    elements.toggleCatImage.addEventListener('click', () => {
+      setUploadMainCategory('image');
+    });
+
+    elements.toggleCatText.addEventListener('click', () => {
+      setUploadMainCategory('text');
+    });
+
+    // Custom Subcategory Select (Upload)
+    elements.customSubcategorySelect.addEventListener('change', (e) => {
+      if (e.target.value === '__custom__') {
+        elements.customSubcategoryInput.classList.remove('hidden');
+        elements.customSubcategoryInput.focus();
+      } else {
+        elements.customSubcategoryInput.classList.add('hidden');
+      }
+    });
+
+    // Main Category Change in Edit Modal
+    elements.editFileMainCategory.addEventListener('change', (e) => {
+      populateSubcategorySelect(elements.editFileSubcategorySelect, elements.editFileSubcategoryCustom, e.target.value);
+    });
+
+    // Subcategory Select in Edit Modal
+    elements.editFileSubcategorySelect.addEventListener('change', (e) => {
+      if (e.target.value === '__custom__') {
+        elements.editFileSubcategoryCustom.classList.remove('hidden');
+        elements.editFileSubcategoryCustom.focus();
+      } else {
+        elements.editFileSubcategoryCustom.classList.add('hidden');
+      }
+    });
+
+    // Explorer Main Category Filter Change
+    elements.mainCategoryFilterSelect.addEventListener('change', (e) => {
+      state.selectedMainFilter = e.target.value;
+      state.currentPage = 1;
+      updateSubcategoryFilterDropdown();
+      fetchFilesList();
+    });
+
+    // Explorer Sub Category Filter Change
+    elements.categoryFilterSelect.addEventListener('change', (e) => {
+      state.selectedSubFilter = e.target.value;
+      state.currentPage = 1;
+      fetchFilesList();
+    });
+
     // Dropzone Drag & Drop
     ['dragenter', 'dragover'].forEach(eventName => {
       elements.dropZone.addEventListener(eventName, (e) => {
@@ -628,26 +798,6 @@
       }
     });
 
-    // Custom Category Toggle (Upload)
-    elements.customCategorySelect.addEventListener('change', (e) => {
-      if (e.target.value === '__custom__') {
-        elements.customCategoryInput.classList.remove('hidden');
-        elements.customCategoryInput.focus();
-      } else {
-        elements.customCategoryInput.classList.add('hidden');
-      }
-    });
-
-    // Custom Category Toggle (Edit Modal)
-    elements.editFileCategorySelect.addEventListener('change', (e) => {
-      if (e.target.value === '__custom__') {
-        elements.editFileCategoryCustom.classList.remove('hidden');
-        elements.editFileCategoryCustom.focus();
-      } else {
-        elements.editFileCategoryCustom.classList.add('hidden');
-      }
-    });
-
     // Edit Modal Actions
     elements.closeEditModal.addEventListener('click', () => {
       elements.editModal.classList.add('hidden');
@@ -659,13 +809,6 @@
 
     elements.saveEditBtn.addEventListener('click', () => {
       savePresetEdit();
-    });
-
-    // Category Filter Change
-    elements.categoryFilterSelect.addEventListener('change', (e) => {
-      state.selectedCategory = e.target.value;
-      state.currentPage = 1;
-      fetchFilesList();
     });
 
     // File Input Browse
@@ -752,7 +895,7 @@
     elements.refreshFilesBtn.addEventListener('click', () => {
       fetchFilesList();
       fetchCategories();
-      showToast('Files list refreshed.', 'info');
+      showToast('Presets list refreshed.', 'info');
     });
 
     // Pagination
@@ -785,7 +928,6 @@
         elements.presetKeyCards.forEach(c => c.classList.remove('active'));
         card.classList.add('active');
         const key = card.getAttribute('data-key');
-        const name = card.getAttribute('data-name');
         elements.customApiKeyInput.value = key;
       });
     });
@@ -806,7 +948,6 @@
       state.apiKey = newKey;
       sessionStorage.setItem('aperture_api_key', newKey);
 
-      // Determine active name
       let matchingPreset = Array.from(elements.presetKeyCards).find(c => c.getAttribute('data-key') === newKey);
       state.keyName = matchingPreset ? matchingPreset.getAttribute('data-name') : 'Custom Key Active';
       sessionStorage.setItem('aperture_key_name', state.keyName);
@@ -842,9 +983,10 @@
   function init() {
     elements.activeKeyName.textContent = state.keyName;
     initEvents();
+    setUploadMainCategory('image');
     switchState('ready');
-    fetchFilesList();
     fetchCategories();
+    fetchFilesList();
   }
 
   document.addEventListener('DOMContentLoaded', init);

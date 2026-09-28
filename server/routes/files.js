@@ -80,11 +80,14 @@ router.post(
         });
       }
 
+      console.log('Upload req.body:', req.body);
       const fileData = await fileService.processUpload(
         req.file,
         {
           title: req.body.title,
-          category: req.body.category
+          mainCategory: req.body.mainCategory || req.body.main_category,
+          subCategory: req.body.subCategory || req.body.sub_category || req.body.category,
+          category: req.body.subCategory || req.body.sub_category || req.body.category
         },
         req.apiKeyInfo
       );
@@ -274,9 +277,14 @@ router.get('/:id/view', (req, res, next) => {
 const handleUpdateFile = (req, res, next) => {
   try {
     const fileId = req.params.id;
-    const { title, category } = req.body;
+    const { title, mainCategory, subCategory, category } = req.body;
 
-    const updated = fileService.updateFile(fileId, { title, category });
+    const updated = fileService.updateFile(fileId, {
+      title,
+      mainCategory,
+      subCategory: subCategory || category,
+      category: subCategory || category
+    });
     return res.json({
       success: true,
       message: `File '${fileId}' updated successfully.`,

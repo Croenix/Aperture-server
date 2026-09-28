@@ -19,7 +19,7 @@ class FileService {
 
   /**
    * Formats a database record into the standard public file JSON format.
-   * Includes title, category, and direct access URLs for seamless client extraction.
+   * Includes title, mainCategory, subCategory, and direct access URLs.
    * @param {Object} record - Database file record
    * @returns {Object} Standardized file JSON
    */
@@ -27,10 +27,15 @@ class FileService {
     if (!record) return null;
     const base = config.baseUrl;
     const sizeFormatted = this._formatBytes(record.size);
+    const mainCategory = record.mainCategory || record.main_category || 'image';
+    const subCategory = record.subCategory || record.sub_category || record.category || 'general';
+
     return {
       id: record.id,
       title: record.title || record.originalName,
-      category: record.category || 'general',
+      mainCategory,
+      subCategory,
+      category: subCategory, // synced alias
       originalName: record.originalName,
       filename: record.filename,
       mimeType: record.mimeType,
@@ -38,6 +43,7 @@ class FileService {
       sizeFormatted: sizeFormatted,
       uploadedAt: record.uploadedAt,
       // Direct access & streaming endpoints
+      fileUrl: `${base}/files/${record.id}`,
       directUrl: `${base}/files/${record.id}`,
       downloadUrl: `${base}/files/${record.id}/download`,
       viewUrl: `${base}/files/${record.id}/view`,
@@ -49,7 +55,7 @@ class FileService {
   /**
    * Processes and stores an uploaded file.
    * @param {Object} multerFile - File object provided by Multer
-   * @param {Object} metadata - Optional custom metadata { title, category }
+   * @param {Object} metadata - Optional custom metadata { title, mainCategory, subCategory, category }
    * @param {Object} apiKeyInfo - API Key details (if authenticated)
    * @returns {Promise<Object>} Formatted file object
    */
@@ -66,13 +72,17 @@ class FileService {
     const mimeType = multerFile.mimetype || 'application/octet-stream';
     const storageProvider = getStorageProvider();
 
-    // Custom title and category handling
+    // Custom title and two-level category handling
     const customTitle = (metadata && metadata.title && typeof metadata.title === 'string' && metadata.title.trim())
       ? metadata.title.trim()
       : originalName;
 
-    const customCategory = (metadata && metadata.category && typeof metadata.category === 'string' && metadata.category.trim())
-      ? metadata.category.trim()
+    const mainCategory = (metadata && metadata.mainCategory && typeof metadata.mainCategory === 'string' && metadata.mainCategory.trim())
+      ? metadata.mainCategory.trim().toLowerCase()
+      : 'image';
+
+    const subCategory = (metadata && (metadata.subCategory || metadata.category) && typeof (metadata.subCategory || metadata.category) === 'string' && (metadata.subCategory || metadata.category).trim())
+      ? (metadata.subCategory || metadata.category).trim()
       : 'general';
 
     // Save physical file via storage provider
@@ -89,7 +99,8 @@ class FileService {
       originalName,
       filename: saveResult.storageFilename,
       title: customTitle,
-      category: customCategory,
+      mainCategory,
+      subCategory,
       mimeType,
       size: saveResult.size || multerFile.size,
       storageProvider: config.storageProvider,
@@ -164,15 +175,15 @@ class FileService {
   }
 
   /**
-   * Lists files with pagination, search, and category filtering.
+   * Lists files with pagination, search, and two-level category filtering.
    * @param {Object} queryParams
    * @returns {Object}
    */
-  listFiles({ page = 1, limit = 20, search = '', category = '' } = {}) {
+  listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '' } = {}) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const limitNum = Math.min(1000, Math.max(1, parseInt(limit, 10) || 20));
 
-    const result = db.listFiles({ page: pageNum, limit: limitNum, search, category });
+    const result = db.listFiles({ page: pageNum, limit: limitNum, search, category, mainCategory, subCategory });
     return {
       files: result.files.map(f => this.formatFileResponse(f)),
       pagination: result.pagination
@@ -180,42 +191,48 @@ class FileService {
   }
 
   /**
-   * Returns list of all unique categories with counts.
+   * Returns categories hierarchy.
    */
   listCategories() {
     return db.listCategories();
   }
 
   /**
-   * Retrieves files/presets grouped by category for instant mobile/client consumption.
+   * Retrieves files/presets grouped by main and subcategories.
    * @param {Object} queryParams
    * @returns {Object} Grouped presets structure
    */
-  getGroupedPresets({ search = '' } = {}) {
-    const allFilesResult = db.listFiles({ page: 1, limit: 1000, search });
+  getGroupedPresets({ search = '', mainCategory = '' } = {}) {
+    const allFilesResult = db.listFiles({ page: 1, limit: 1000, search, mainCategory });
     const formatted = allFilesResult.files.map(f => this.formatFileResponse(f));
-    const categories = db.listCategories().map(c => c.category);
 
-    const grouped = {};
+    const grouped = {
+      image: {},
+      text: {}
+    };
+
     formatted.forEach(file => {
-      const cat = file.category || 'general';
-      if (!grouped[cat]) {
-        grouped[cat] = [];
+      const main = file.mainCategory || 'image';
+      const sub = file.subCategory || 'general';
+      if (!grouped[main]) {
+        grouped[main] = {};
       }
-      grouped[cat].push(file);
+      if (!grouped[main][sub]) {
+        grouped[main][sub] = [];
+      }
+      grouped[main][sub].push(file);
     });
 
     return {
       total: formatted.length,
-      categories,
       grouped
     };
   }
 
   /**
-   * Updates metadata (title, category) for an existing file.
+   * Updates metadata (title, mainCategory, subCategory) for an existing file.
    * @param {string} fileId 
-   * @param {Object} updates { title, category }
+   * @param {Object} updates { title, mainCategory, subCategory, category }
    * @returns {Object} Updated file response
    */
   updateFile(fileId, updates = {}) {

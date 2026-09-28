@@ -114,35 +114,46 @@
                 </button>
               </div>
 
-              <!-- Metadata customization: Title & Category -->
+              <!-- Metadata customization: Title, Main Category & Subcategory -->
               <div class="upload-meta-form">
                 <div class="form-group">
                   <label for="custom-title-input" class="input-label">
-                    <span>File Title / Display Name</span>
-                    <span class="label-hint">(Optional custom title for metadata)</span>
+                    <span>Preset Title / Display Name</span>
+                    <span class="label-hint">(e.g. Vintage Amber Glow, Cinematic LUT)</span>
                   </label>
-                  <input type="text" id="custom-title-input" class="form-input" placeholder="e.g. Aperture Firmware Module v2.4">
+                  <input type="text" id="custom-title-input" class="form-input" placeholder="e.g. Vintage Film Glow">
                 </div>
 
+                <!-- Main Category Switcher (Image Preset vs Text Preset) -->
                 <div class="form-group">
-                  <label for="custom-category-select" class="input-label">
-                    <span>Category</span>
-                    <span class="label-hint">(Used for organized API retrieval)</span>
+                  <label class="input-label">
+                    <span>Main Category</span>
+                    <span class="label-hint">(Select preset type)</span>
+                  </label>
+                  <div class="category-type-tabs" id="main-category-toggle-group">
+                    <button type="button" class="category-tab-btn active" data-main-category="image" id="toggle-cat-image">
+                      <svg class="icon tab-icon-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                      <span>Image Preset</span>
+                    </button>
+                    <button type="button" class="category-tab-btn" data-main-category="text" id="toggle-cat-text">
+                      <svg class="icon tab-icon-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+                      <span>Text Preset</span>
+                    </button>
+                  </div>
+                  <input type="hidden" id="upload-main-category" value="image">
+                </div>
+
+                <!-- Sub Category Picker -->
+                <div class="form-group">
+                  <label for="custom-subcategory-select" class="input-label">
+                    <span>Sub Category</span>
+                    <span class="label-hint" id="subcategory-label-hint">(Select preset style or type a custom name)</span>
                   </label>
                   <div class="category-picker-row">
-                    <select id="custom-category-select" class="form-select">
-                      <option value="cinematic">Cinematic</option>
-                      <option value="portrait">Portrait</option>
-                      <option value="landscape">Landscape</option>
-                      <option value="vintage">Vintage</option>
-                      <option value="firmware">Firmware / APX Package</option>
-                      <option value="config">Configuration</option>
-                      <option value="documents">Documents</option>
-                      <option value="updates">Software Updates</option>
-                      <option value="general" selected>General</option>
-                      <option value="__custom__">+ Enter Custom Category...</option>
+                    <select id="custom-subcategory-select" class="form-select">
+                      <!-- Populated dynamically based on Main Category -->
                     </select>
-                    <input type="text" id="custom-category-input" class="form-input hidden" placeholder="Type your custom category name...">
+                    <input type="text" id="custom-subcategory-input" class="form-input hidden" placeholder="Type new subcategory name...">
                   </div>
                 </div>
               </div>
@@ -150,7 +161,7 @@
               <div class="action-buttons">
                 <button type="button" id="start-upload-btn" class="btn btn-primary btn-lg btn-glow">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                  Upload File
+                  Upload Preset File
                 </button>
               </div>
             </div>
@@ -195,7 +206,7 @@
               </div>
               <div>
                 <h3 class="state-title text-success">Upload successful</h3>
-                <p class="state-subtitle">Your file has been stored securely with custom title & category metadata.</p>
+                <p class="state-subtitle">Your preset has been stored securely with custom title & category hierarchy.</p>
               </div>
             </div>
 
@@ -206,8 +217,12 @@
                 <span class="info-value font-semibold text-cyan" id="success-title">-</span>
               </div>
               <div class="info-row">
-                <span class="info-label">Category</span>
-                <span class="info-value" id="success-category"><span class="badge badge-category">-</span></span>
+                <span class="info-label">Main Category</span>
+                <span class="info-value" id="success-main-category"><span class="badge badge-main-image">Image Preset</span></span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Sub Category</span>
+                <span class="info-value" id="success-sub-category"><span class="badge badge-subcategory">-</span></span>
               </div>
               <div class="info-row">
                 <span class="info-label">Original File Name</span>
@@ -218,7 +233,7 @@
                 <span class="info-value" id="success-filesize">-</span>
               </div>
               <div class="info-row">
-                <span class="info-label">File ID</span>
+                <span class="info-label">Preset ID</span>
                 <span class="info-value font-mono text-cyan" id="success-fileid">-</span>
               </div>
               <div class="info-row">
@@ -236,7 +251,7 @@
               <!-- Public File URL -->
               <div class="url-group">
                 <label class="url-label">
-                  <span>Public File URL</span>
+                  <span>Direct Preset File URL</span>
                   <span class="badge badge-subtle">Direct Access / Stream</span>
                 </label>
                 <div class="url-input-container">
@@ -251,7 +266,7 @@
               <!-- API URL -->
               <div class="url-group">
                 <label class="url-label">
-                  <span>REST API URL</span>
+                  <span>REST API Endpoint</span>
                   <span class="badge badge-subtle">Metadata Endpoint</span>
                 </label>
                 <div class="url-input-container">
@@ -325,23 +340,32 @@
         <div class="card explorer-card">
           <div class="explorer-header">
             <div class="explorer-title-wrap">
-              <h2>Uploaded Files Repository</h2>
-              <span class="badge badge-counter" id="file-total-count">0 files</span>
+              <h2>Presets & Files Repository</h2>
+              <span class="badge badge-counter" id="file-total-count">0 presets</span>
             </div>
             
             <div class="explorer-controls">
-              <!-- Category Filter -->
+              <!-- Main Category Filter -->
               <div class="filter-wrap">
-                <select id="category-filter-select" class="form-select filter-select" aria-label="Filter by Category">
-                  <option value="all">All Categories</option>
+                <select id="main-category-filter-select" class="form-select filter-select" aria-label="Filter by Preset Type">
+                  <option value="all">All Types</option>
+                  <option value="image">Image Presets</option>
+                  <option value="text">Text Presets</option>
+                </select>
+              </div>
+
+              <!-- Sub Category Filter -->
+              <div class="filter-wrap">
+                <select id="category-filter-select" class="form-select filter-select" aria-label="Filter by Subcategory">
+                  <option value="all">All Subcategories</option>
                 </select>
               </div>
 
               <div class="search-input-wrap">
                 <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <input type="text" id="file-search-input" placeholder="Search by title, name, category, ID...">
+                <input type="text" id="file-search-input" placeholder="Search title, subcategory, ID...">
               </div>
-              <button id="refresh-files-btn" class="btn btn-glass" title="Refresh files list">
+              <button id="refresh-files-btn" class="btn btn-glass" title="Refresh list">
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
               </button>
             </div>
@@ -352,7 +376,8 @@
               <thead>
                 <tr>
                   <th>Title & Original Name</th>
-                  <th>Category</th>
+                  <th>Main Category</th>
+                  <th>Sub Category</th>
                   <th>ID</th>
                   <th>Size</th>
                   <th>Uploaded At</th>
@@ -361,10 +386,10 @@
               </thead>
               <tbody id="files-table-body">
                 <tr>
-                  <td colspan="6" class="empty-placeholder">
+                  <td colspan="7" class="empty-placeholder">
                     <div class="empty-state">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
-                      <p>No files loaded yet. Upload your first file above!</p>
+                      <p>No presets loaded yet. Upload your first preset above!</p>
                     </div>
                   </td>
                 </tr>
@@ -401,22 +426,23 @@
             <input type="text" id="edit-file-title" class="form-input" placeholder="e.g. Cinematic Forest Glow">
           </div>
 
+          <!-- Edit Main Category -->
           <div class="form-group">
-            <label for="edit-file-category-select" class="input-label">Category</label>
+            <label for="edit-file-main-category" class="input-label">Main Category</label>
+            <select id="edit-file-main-category" class="form-select">
+              <option value="image">Image Preset</option>
+              <option value="text">Text Preset</option>
+            </select>
+          </div>
+
+          <!-- Edit Sub Category -->
+          <div class="form-group">
+            <label for="edit-file-subcategory-select" class="input-label">Sub Category</label>
             <div class="category-picker-row">
-              <select id="edit-file-category-select" class="form-select">
-                <option value="cinematic">Cinematic</option>
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-                <option value="vintage">Vintage</option>
-                <option value="firmware">Firmware / APX Package</option>
-                <option value="config">Configuration</option>
-                <option value="documents">Documents</option>
-                <option value="updates">Software Updates</option>
-                <option value="general">General</option>
-                <option value="__custom__">+ Custom Category...</option>
+              <select id="edit-file-subcategory-select" class="form-select">
+                <!-- Populated dynamically -->
               </select>
-              <input type="text" id="edit-file-category-custom" class="form-input hidden" placeholder="Enter custom category...">
+              <input type="text" id="edit-file-subcategory-custom" class="form-input hidden" placeholder="Enter custom subcategory...">
             </div>
           </div>
         </div>
@@ -482,49 +508,55 @@
         </div>
         <div class="modal-body">
           <div class="docs-section">
-            <h4>1. Upload File</h4>
+            <h4>1. Get Image Presets Only</h4>
+            <div class="code-block">
+              <code>curl -X GET http://localhost:3000/api/presets/image
+# Or filter by subcategory:
+curl -X GET http://localhost:3000/api/presets/image/Vintage</code>
+            </div>
+          </div>
+
+          <div class="docs-section">
+            <h4>2. Get Text Presets Only</h4>
+            <div class="code-block">
+              <code>curl -X GET http://localhost:3000/api/presets/text
+# Or filter by subcategory:
+curl -X GET http://localhost:3000/api/presets/text/Quotes</code>
+            </div>
+          </div>
+
+          <div class="docs-section">
+            <h4>3. Get All Categories & Subcategories Tree</h4>
+            <div class="code-block">
+              <code>curl -X GET http://localhost:3000/api/presets/categories</code>
+            </div>
+          </div>
+
+          <div class="docs-section">
+            <h4>4. Upload Preset (with Main Category & Sub Category)</h4>
             <div class="code-block">
               <code>curl -X POST http://localhost:3000/api/v1/files \
   -H "Authorization: Bearer aperture_upl_secret_key_2026" \
-  -F "file=@/path/to/document.pdf"</code>
+  -F "file=@/path/to/preset.dng" \
+  -F "title=Amber Sunset" \
+  -F "mainCategory=image" \
+  -F "subCategory=Vintage"</code>
             </div>
           </div>
 
           <div class="docs-section">
-            <h4>2. Get File Metadata</h4>
+            <h4>5. Edit Preset Title & Category Hierarchy</h4>
             <div class="code-block">
-              <code>curl -X GET http://localhost:3000/api/v1/files/f_8a72c91e4f2b \
-  -H "Authorization: Bearer aperture_ro_secret_key_2026"</code>
+              <code>curl -X PATCH http://localhost:3000/api/presets/f_8a72c91e4f2b \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Updated Title", "mainCategory": "image", "subCategory": "Cinematic"}'</code>
             </div>
           </div>
 
           <div class="docs-section">
-            <h4>3. Download File</h4>
+            <h4>6. Download / Direct File Access</h4>
             <div class="code-block">
-              <code>curl -O -J http://localhost:3000/api/v1/files/f_8a72c91e4f2b/download</code>
-            </div>
-          </div>
-
-          <div class="docs-section">
-            <h4>4. Stream / Inline View</h4>
-            <div class="code-block">
-              <code>curl -i http://localhost:3000/api/v1/files/f_8a72c91e4f2b/view</code>
-            </div>
-          </div>
-
-          <div class="docs-section">
-            <h4>5. Delete File</h4>
-            <div class="code-block">
-              <code>curl -X DELETE http://localhost:3000/api/v1/files/f_8a72c91e4f2b \
-  -H "Authorization: Bearer aperture_adm_secret_key_2026"</code>
-            </div>
-          </div>
-
-          <div class="docs-section">
-            <h4>6. List Uploaded Files</h4>
-            <div class="code-block">
-              <code>curl -X GET "http://localhost:3000/api/v1/files?page=1&limit=20" \
-  -H "Authorization: Bearer aperture_ro_secret_key_2026"</code>
+              <code>curl -O -J http://localhost:3000/files/f_8a72c91e4f2b/download</code>
             </div>
           </div>
         </div>

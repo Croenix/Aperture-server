@@ -1,0 +1,579 @@
+================================================================================
+              APERTURE SERVER - REST API DOCUMENTATION & DEMO FEED
+================================================================================
+
+Base URL:
+  https://aperture-server.onrender.com
+
+Web Dashboard & Explorer:
+  https://aperture-server.onrender.com/
+
+Health Status:
+  https://aperture-server.onrender.com/api/v1/health
+
+
+================================================================================
+1. AUTHENTICATION & API KEYS
+================================================================================
+
+Pass the API Key in the HTTP Authorization header using the Bearer scheme:
+  Authorization: Bearer <API_KEY>
+
+Default Seed API Keys:
+--------------------------------------------------------------------------------
+Profile Name     Key Value                        Permissions
+--------------------------------------------------------------------------------
+Master Admin     aperture_adm_secret_key_2026     files:read, files:upload,
+                                                  files:delete, files:manage
+Uploader         aperture_upl_secret_key_2026     files:read, files:upload
+Read-Only        aperture_ro_secret_key_2026      files:read
+--------------------------------------------------------------------------------
+* Public preset endpoints (GET /api/presets/*) and direct downloads (/files/*)
+  can be called with or without Authorization headers.
+
+
+================================================================================
+2. TWO-LEVEL PRESET SYSTEM OVERVIEW
+================================================================================
+
+1. MAIN CATEGORY:
+   - "image" (Image Presets)
+   - "text"  (Text Presets)
+
+2. SUB CATEGORY:
+   - Image Preset Defaults:
+     "Vintage", "Modern", "Black & White", "Cinematic", "Portrait",
+     "Landscape", "Moody", "Warm Tones", "Cool Tones", "Cyberpunk" + Custom
+   - Text Preset Defaults:
+     Dynamic user-created subcategories (e.g., "Quotes", "Captions", "Lyrics")
+
+
+================================================================================
+3. PRESET API ENDPOINTS (DEMO FEEDS & SCHEMAS)
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 GET ALL IMAGE PRESETS ONLY
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/api/presets/image
+
+Optional Query Parameters:
+  ?search=sunset
+  ?subCategory=Vintage
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/presets/image"
+
+Sample JSON Response Feed:
+{
+  "success": true,
+  "mainCategory": "image",
+  "count": 2,
+  "subCategories": [
+    "Vintage",
+    "Cinematic"
+  ],
+  "presets": [
+    {
+      "id": "f_c11d0a6c3916",
+      "title": "Amber Sunset LUT",
+      "mainCategory": "image",
+      "subCategory": "Vintage",
+      "category": "Vintage",
+      "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916",
+      "downloadUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/download",
+      "viewUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/view",
+      "fileName": "amber_sunset.cube",
+      "fileSize": 118086,
+      "sizeFormatted": "115.32 KB",
+      "uploadedAt": "2026-09-28T20:23:16.336Z"
+    },
+    {
+      "id": "f_9a81b2c3d4e5",
+      "title": "Moody Forest Glow",
+      "mainCategory": "image",
+      "subCategory": "Cinematic",
+      "category": "Cinematic",
+      "fileUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5",
+      "downloadUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5/download",
+      "viewUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5/view",
+      "fileName": "forest_glow.dng",
+      "fileSize": 2450124,
+      "sizeFormatted": "2.34 MB",
+      "uploadedAt": "2026-09-28T20:35:10.120Z"
+    }
+  ],
+  "grouped": {
+    "Vintage": [
+      {
+        "id": "f_c11d0a6c3916",
+        "title": "Amber Sunset LUT",
+        "mainCategory": "image",
+        "subCategory": "Vintage",
+        "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916"
+      }
+    ],
+    "Cinematic": [
+      {
+        "id": "f_9a81b2c3d4e5",
+        "title": "Moody Forest Glow",
+        "mainCategory": "image",
+        "subCategory": "Cinematic",
+        "fileUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5"
+      }
+    ]
+  }
+}
+
+
+--------------------------------------------------------------------------------
+3.2 GET IMAGE PRESETS BY SUBCATEGORY PATH
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/api/presets/image/:subCategory
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/presets/image/Vintage"
+
+Sample JSON Response Feed:
+{
+  "success": true,
+  "mainCategory": "image",
+  "count": 1,
+  "subCategories": [
+    "Vintage"
+  ],
+  "presets": [
+    {
+      "id": "f_c11d0a6c3916",
+      "title": "Amber Sunset LUT",
+      "mainCategory": "image",
+      "subCategory": "Vintage",
+      "category": "Vintage",
+      "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916",
+      "downloadUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/download",
+      "viewUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/view",
+      "fileName": "amber_sunset.cube",
+      "fileSize": 118086,
+      "sizeFormatted": "115.32 KB",
+      "uploadedAt": "2026-09-28T20:23:16.336Z"
+    }
+  ]
+}
+
+
+--------------------------------------------------------------------------------
+3.3 GET ALL TEXT PRESETS ONLY
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/api/presets/text
+
+Optional Query Parameters:
+  ?search=golden
+  ?subCategory=Quotes
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/presets/text"
+
+Sample JSON Response Feed:
+{
+  "success": true,
+  "mainCategory": "text",
+  "count": 1,
+  "subCategories": [
+    "Quotes"
+  ],
+  "presets": [
+    {
+      "id": "f_7b8c6e478d2b",
+      "title": "Golden Hour Caption",
+      "mainCategory": "text",
+      "subCategory": "Quotes",
+      "category": "Quotes",
+      "fileUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b",
+      "downloadUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b/download",
+      "viewUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b/view",
+      "fileName": "sample_text.txt",
+      "fileSize": 54,
+      "sizeFormatted": "54 Bytes",
+      "uploadedAt": "2026-09-28T20:58:17.168Z"
+    }
+  ],
+  "grouped": {
+    "Quotes": [
+      {
+        "id": "f_7b8c6e478d2b",
+        "title": "Golden Hour Caption",
+        "mainCategory": "text",
+        "subCategory": "Quotes",
+        "fileUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b"
+      }
+    ]
+  }
+}
+
+
+--------------------------------------------------------------------------------
+3.4 GET TEXT PRESETS BY SUBCATEGORY PATH
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/api/presets/text/:subCategory
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/presets/text/Quotes"
+
+
+--------------------------------------------------------------------------------
+3.5 GET FULL CATEGORIES & SUBCATEGORIES TREE
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/api/presets/categories
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/presets/categories"
+
+Sample JSON Response Feed:
+{
+  "success": true,
+  "categories": {
+    "image": [
+      "Vintage",
+      "Modern",
+      "Black & White",
+      "Cinematic",
+      "Portrait",
+      "Landscape",
+      "Moody",
+      "Warm Tones",
+      "Cool Tones",
+      "Cyberpunk"
+    ],
+    "text": [
+      "Quotes",
+      "Captions"
+    ],
+    "all": {
+      "raw": [
+        { "main_category": "image", "sub_category": "Vintage", "count": 5 },
+        { "main_category": "text", "sub_category": "Quotes", "count": 2 }
+      ],
+      "hierarchy": {
+        "image": [{ "subCategory": "Vintage", "count": 5 }],
+        "text": [{ "subCategory": "Quotes", "count": 2 }]
+      }
+    }
+  }
+}
+
+
+--------------------------------------------------------------------------------
+3.6 GET ALL PRESETS (HIERARCHICALLY GROUPED)
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/api/presets
+
+Sample JSON Response Feed:
+{
+  "success": true,
+  "totalCount": 2,
+  "imageCount": 1,
+  "textCount": 1,
+  "presets": {
+    "image": [
+      {
+        "id": "f_c11d0a6c3916",
+        "title": "Amber Sunset LUT",
+        "mainCategory": "image",
+        "subCategory": "Vintage",
+        "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916"
+      }
+    ],
+    "text": [
+      {
+        "id": "f_7b8c6e478d2b",
+        "title": "Golden Hour Caption",
+        "mainCategory": "text",
+        "subCategory": "Quotes",
+        "fileUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b"
+      }
+    ]
+  }
+}
+
+
+--------------------------------------------------------------------------------
+3.7 EDIT PRESET (TITLE / CATEGORIES)
+--------------------------------------------------------------------------------
+Endpoint:
+  PATCH https://aperture-server.onrender.com/api/presets/:id
+  PUT   https://aperture-server.onrender.com/api/presets/:id
+
+Headers:
+  Content-Type: application/json
+  Authorization: Bearer aperture_upl_secret_key_2026
+
+Request Body (JSON):
+{
+  "title": "Vintage Sunset Glow",
+  "mainCategory": "image",
+  "subCategory": "Vintage"
+}
+
+cURL Example:
+  curl -X PATCH "https://aperture-server.onrender.com/api/presets/f_c11d0a6c3916" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer aperture_upl_secret_key_2026" \
+    -d '{"title": "Vintage Sunset Glow", "mainCategory": "image", "subCategory": "Vintage"}'
+
+Sample JSON Response Feed:
+{
+  "success": true,
+  "message": "Preset 'f_c11d0a6c3916' updated successfully.",
+  "preset": {
+    "id": "f_c11d0a6c3916",
+    "title": "Vintage Sunset Glow",
+    "mainCategory": "image",
+    "subCategory": "Vintage",
+    "category": "Vintage",
+    "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916",
+    "downloadUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/download",
+    "viewUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/view",
+    "fileName": "amber_sunset.cube",
+    "fileSize": 118086,
+    "sizeFormatted": "115.32 KB",
+    "uploadedAt": "2026-09-28T20:23:16.336Z"
+  }
+}
+
+
+--------------------------------------------------------------------------------
+3.8 DELETE PRESET
+--------------------------------------------------------------------------------
+Endpoint:
+  DELETE https://aperture-server.onrender.com/api/presets/:id
+
+cURL Example:
+  curl -X DELETE "https://aperture-server.onrender.com/api/presets/f_c11d0a6c3916" \
+    -H "Authorization: Bearer aperture_adm_secret_key_2026"
+
+Sample JSON Response Feed:
+{
+  "success": true,
+  "message": "Preset 'f_c11d0a6c3916' has been removed."
+}
+
+
+================================================================================
+4. CORE FILE MANAGEMENT API ENDPOINTS
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1 UPLOAD PRESET FILE
+--------------------------------------------------------------------------------
+Endpoint:
+  POST https://aperture-server.onrender.com/api/v1/files
+
+Headers:
+  Authorization: Bearer aperture_upl_secret_key_2026
+  Content-Type: multipart/form-data
+
+Form-Data Parameters:
+  - file (Required): Binary file (up to 100 MB)
+  - title (Optional): Custom display title (e.g. "Amber Sunset")
+  - mainCategory (Optional): "image" or "text" (Default: "image")
+  - subCategory (Optional): Subcategory name (e.g. "Vintage", "Quotes")
+
+cURL Example:
+  curl -X POST "https://aperture-server.onrender.com/api/v1/files" \
+    -H "Authorization: Bearer aperture_upl_secret_key_2026" \
+    -F "file=@/path/to/preset.dng" \
+    -F "title=Amber Sunset" \
+    -F "mainCategory=image" \
+    -F "subCategory=Vintage"
+
+Sample JSON Response Feed:
+{
+  "success": true,
+  "file": {
+    "id": "f_c11d0a6c3916",
+    "title": "Amber Sunset",
+    "mainCategory": "image",
+    "subCategory": "Vintage",
+    "category": "Vintage",
+    "originalName": "preset.dng",
+    "filename": "f_c11d0a6c3916.dng",
+    "mimeType": "image/x-adobe-dng",
+    "size": 118086,
+    "sizeFormatted": "115.32 KB",
+    "uploadedAt": "2026-09-28T20:23:16.336Z",
+    "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916",
+    "directUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916",
+    "downloadUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/download",
+    "viewUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/view",
+    "url": "https://aperture-server.onrender.com/files/f_c11d0a6c3916",
+    "apiUrl": "https://aperture-server.onrender.com/api/v1/files/f_c11d0a6c3916"
+  }
+}
+
+
+--------------------------------------------------------------------------------
+4.2 GET FILE METADATA
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/api/v1/files/:id
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/v1/files/f_c11d0a6c3916" \
+    -H "Authorization: Bearer aperture_ro_secret_key_2026"
+
+
+--------------------------------------------------------------------------------
+4.3 DOWNLOAD FILE DIRECTLY
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/files/:id/download
+  GET https://aperture-server.onrender.com/api/v1/files/:id/download
+
+cURL Example:
+  curl -O -J "https://aperture-server.onrender.com/files/f_c11d0a6c3916/download"
+
+
+--------------------------------------------------------------------------------
+4.4 VIEW / STREAM FILE INLINE
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/files/:id/view
+  GET https://aperture-server.onrender.com/api/v1/files/:id/view
+
+Supports HTTP 206 Partial Content Range headers for video/audio seek & stream.
+
+cURL Example:
+  curl -i "https://aperture-server.onrender.com/files/f_c11d0a6c3916/view"
+
+
+--------------------------------------------------------------------------------
+4.5 LIST ALL FILES (PAGINATED WITH FILTERS)
+--------------------------------------------------------------------------------
+Endpoint:
+  GET https://aperture-server.onrender.com/api/v1/files
+
+Query Parameters:
+  - page (Default: 1)
+  - limit (Default: 20, Max: 1000)
+  - search (Optional text search)
+  - mainCategory (Optional: "image" or "text")
+  - subCategory (Optional subcategory filter)
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/v1/files?page=1&limit=20&mainCategory=image&subCategory=Vintage" \
+    -H "Authorization: Bearer aperture_ro_secret_key_2026"
+
+
+================================================================================
+5. CLIENT CODE EXAMPLES
+================================================================================
+
+--------------------------------------------------------------------------------
+5.1 JAVASCRIPT / TYPESCRIPT (FETCH)
+--------------------------------------------------------------------------------
+```javascript
+// 1. Fetch Image Presets
+async function getImagePresets(subCategory = '') {
+  const url = subCategory 
+    ? `https://aperture-server.onrender.com/api/presets/image/${encodeURIComponent(subCategory)}`
+    : 'https://aperture-server.onrender.com/api/presets/image';
+  
+  const response = await fetch(url);
+  const data = await response.json();
+  console.log('Image Presets:', data.presets);
+  return data.presets;
+}
+
+// 2. Fetch Text Presets
+async function getTextPresets(subCategory = '') {
+  const url = subCategory 
+    ? `https://aperture-server.onrender.com/api/presets/text/${encodeURIComponent(subCategory)}`
+    : 'https://aperture-server.onrender.com/api/presets/text';
+  
+  const response = await fetch(url);
+  const data = await response.json();
+  console.log('Text Presets:', data.presets);
+  return data.presets;
+}
+
+// 3. Upload a Preset
+async function uploadPreset(fileObject, title, mainCategory, subCategory, apiKey) {
+  const formData = new FormData();
+  formData.append('file', fileObject);
+  formData.append('title', title);
+  formData.append('mainCategory', mainCategory); // 'image' or 'text'
+  formData.append('subCategory', subCategory);
+
+  const response = await fetch('https://aperture-server.onrender.com/api/v1/files', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: formData
+  });
+
+  return await response.json();
+}
+```
+
+--------------------------------------------------------------------------------
+5.2 PYTHON (REQUESTS)
+--------------------------------------------------------------------------------
+```python
+import requests
+
+BASE_URL = "https://aperture-server.onrender.com"
+API_KEY = "aperture_upl_secret_key_2026"
+
+# 1. Fetch Image Presets
+response = requests.get(f"{BASE_URL}/api/presets/image")
+print("Image Presets:", response.json())
+
+# 2. Upload an Image Preset
+files = {'file': open('sunset_preset.dng', 'rb')}
+data = {
+    'title': 'Sunset Preset Gold',
+    'mainCategory': 'image',
+    'subCategory': 'Vintage'
+}
+headers = {'Authorization': f'Bearer {API_KEY}'}
+
+upload_res = requests.post(f"{BASE_URL}/api/v1/files", files=files, data=data, headers=headers)
+print("Upload Result:", upload_res.json())
+```
+
+
+================================================================================
+6. STANDARD ERROR FORMAT
+================================================================================
+
+All error responses follow this consistent JSON structure:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "A valid Bearer token must be provided via the Authorization header."
+  }
+}
+```
+
+Common Error Codes:
+- `UNAUTHORIZED` (401): Missing or invalid Bearer token.
+- `FORBIDDEN` (403): API key lacks the required permission scope.
+- `NO_FILE_PROVIDED` (400): No file found in multipart upload.
+- `FILE_NOT_FOUND` (404): Specified file ID was not found.
+- `INVALID_FILE_ID` (400): Malformed file ID parameter.
+- `FILE_TOO_LARGE` (413): File exceeded maximum allowed limit (100 MB).
+- `RATE_LIMIT_EXCEEDED` (429): Exceeded rate limit (300 requests per 15 min).
+
+================================================================================
+Generated for Aperture Server: https://aperture-server.onrender.com
+================================================================================

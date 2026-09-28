@@ -6,37 +6,70 @@ const config = require('../config');
 const router = express.Router();
 
 /**
+ * Standard default subcategories for presets
+ */
+const DEFAULT_IMAGE_SUBCATEGORIES = [
+  'Vintage',
+  'Modern',
+  'Black & White',
+  'Cinematic',
+  'Portrait',
+  'Landscape',
+  'Moody',
+  'Warm Tones',
+  'Cool Tones',
+  'Cyberpunk'
+];
+
+/**
  * Helper to map a file record to a clean, focused preset object.
  */
 function toCleanPreset(file) {
   const base = config.baseUrl;
+  const mainCategory = file.mainCategory || file.main_category || 'image';
+  const subCategory = file.subCategory || file.sub_category || file.category || 'general';
+
   return {
     id: file.id,
     title: file.title || file.originalName,
-    category: file.category || 'general',
+    mainCategory: mainCategory,
+    subCategory: subCategory,
+    category: subCategory, // alias
     fileUrl: `${base}/files/${file.id}`,
     downloadUrl: `${base}/files/${file.id}/download`,
+    viewUrl: `${base}/files/${file.id}/view`,
     fileName: file.originalName || file.filename,
     fileSize: file.size,
-    sizeFormatted: file.sizeFormatted || `${file.size} Bytes`
+    sizeFormatted: file.sizeFormatted || `${file.size} Bytes`,
+    uploadedAt: file.uploadedAt
   };
 }
 
 /**
- * FORMAT 1: GET /api/preset or /api/presets or /api/v1/presets
- * Returns flat list of presets with title, category, and direct file access links.
- * Optional query: ?category=... &search=...
+ * GET /api/presets/categories
+ * Returns the two-level category tree with presets and custom user categories.
  */
-router.get('/', optionalAuth, (req, res, next) => {
+router.get('/categories', optionalAuth, (req, res, next) => {
   try {
-    const { category, search } = req.query;
-    const result = fileService.listFiles({ page: 1, limit: 1000, search, category });
-    const cleanPresets = result.files.map(toCleanPreset);
+    const dbCategories = fileService.listCategories();
+    const dbImgSubs = (dbCategories && dbCategories.hierarchy && dbCategories.hierarchy.image)
+      ? dbCategories.hierarchy.image.map(x => x.subCategory).filter(Boolean)
+      : [];
+    const dbTextSubs = (dbCategories && dbCategories.hierarchy && dbCategories.hierarchy.text)
+      ? dbCategories.hierarchy.text.map(x => x.subCategory).filter(Boolean)
+      : [];
+
+    // Combine defaults with existing categories in DB
+    const imageSet = new Set([...DEFAULT_IMAGE_SUBCATEGORIES, ...dbImgSubs]);
+    const textSet = new Set(dbTextSubs);
 
     return res.json({
       success: true,
-      count: cleanPresets.length,
-      presets: cleanPresets
+      categories: {
+        image: Array.from(imageSet),
+        text: Array.from(textSet),
+        all: dbCategories
+      }
     });
   } catch (err) {
     next(err);
@@ -44,27 +77,156 @@ router.get('/', optionalAuth, (req, res, next) => {
 });
 
 /**
- * FORMAT 2 (Grouped): GET /api/preset/grouped or /api/presets/grouped
- * Returns all presets organized by category keys for instant UI/client tab loading.
+ * GET /api/presets/image
+ * GET /api/presets/image/:subCategory
+ * Dedicated endpoint returning ONLY Image Presets.
  */
-router.get('/grouped', optionalAuth, (req, res, next) => {
+const handleImagePresets = (req, res, next) => {
   try {
+    const subCategory = req.params.subCategory || req.query.subCategory || req.query.category;
     const { search } = req.query;
-    const result = fileService.listFiles({ page: 1, limit: 1000, search });
-    
-    const grouped = {};
-    result.files.forEach(file => {
-      const preset = toCleanPreset(file);
-      const cat = preset.category;
-      if (!grouped[cat]) {
-        grouped[cat] = [];
-      }
-      grouped[cat].push(preset);
+
+    const result = fileService.listFiles({
+      page: 1,
+      limit: 1000,
+      search,
+      mainCategory: 'image',
+      subCategory: subCategory || ''
+    });
+
+    const presets = result.files.map(toCleanPreset);
+
+    // Group by subcategory
+    const subGrouped = {};
+    presets.forEach(p => {
+      const sub = p.subCategory || 'general';
+      if (!subGrouped[sub]) subGrouped[sub] = [];
+      subGrouped[sub].push(p);
     });
 
     return res.json({
       success: true,
-      presets: grouped
+      mainCategory: 'image',
+      count: presets.length,
+      subCategories: Object.keys(subGrouped),
+      presets: presets,
+      grouped: subGrouped
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+router.get('/image', optionalAuth, handleImagePresets);
+router.get('/image/:subCategory', optionalAuth, handleImagePresets);
+
+/**
+ * GET /api/presets/text
+ * GET /api/presets/text/:subCategory
+ * Dedicated endpoint returning ONLY Text Presets.
+ */
+const handleTextPresets = (req, res, next) => {
+  try {
+    const subCategory = req.params.subCategory || req.query.subCategory || req.query.category;
+    const { search } = req.query;
+
+    const result = fileService.listFiles({
+      page: 1,
+      limit: 1000,
+      search,
+      mainCategory: 'text',
+      subCategory: subCategory || ''
+    });
+
+    const presets = result.files.map(toCleanPreset);
+
+    // Group by subcategory
+    const subGrouped = {};
+    presets.forEach(p => {
+      const sub = p.subCategory || 'general';
+      if (!subGrouped[sub]) subGrouped[sub] = [];
+      subGrouped[sub].push(p);
+    });
+
+    return res.json({
+      success: true,
+      mainCategory: 'text',
+      count: presets.length,
+      subCategories: Object.keys(subGrouped),
+      presets: presets,
+      grouped: subGrouped
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+router.get('/text', optionalAuth, handleTextPresets);
+router.get('/text/:subCategory', optionalAuth, handleTextPresets);
+
+/**
+ * GET /api/preset or /api/presets
+ * Returns hierarchical list separated cleanly into image and text presets.
+ */
+router.get('/', optionalAuth, (req, res, next) => {
+  try {
+    const { mainCategory, subCategory, category, search } = req.query;
+
+    // If specific main category requested
+    if (mainCategory && mainCategory.toLowerCase() === 'image') {
+      const result = fileService.listFiles({ page: 1, limit: 1000, search, mainCategory: 'image', subCategory: subCategory || category });
+      return res.json({
+        success: true,
+        mainCategory: 'image',
+        presets: result.files.map(toCleanPreset)
+      });
+    }
+
+    if (mainCategory && mainCategory.toLowerCase() === 'text') {
+      const result = fileService.listFiles({ page: 1, limit: 1000, search, mainCategory: 'text', subCategory: subCategory || category });
+      return res.json({
+        success: true,
+        mainCategory: 'text',
+        presets: result.files.map(toCleanPreset)
+      });
+    }
+
+    // Default: fetch all and return clean separated structure
+    const allResult = fileService.listFiles({ page: 1, limit: 1000, search, subCategory: subCategory || category });
+    const allClean = allResult.files.map(toCleanPreset);
+
+    const imagePresets = allClean.filter(p => p.mainCategory === 'image');
+    const textPresets = allClean.filter(p => p.mainCategory === 'text');
+
+    return res.json({
+      success: true,
+      totalCount: allClean.length,
+      imageCount: imagePresets.length,
+      textCount: textPresets.length,
+      presets: {
+        image: imagePresets,
+        text: textPresets
+      },
+      all: allClean
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/preset/grouped or /api/presets/grouped
+ * Returns all presets organized by mainCategory -> subCategory hierarchy.
+ */
+router.get('/grouped', optionalAuth, (req, res, next) => {
+  try {
+    const { search } = req.query;
+    const groupedData = fileService.getGroupedPresets({ search });
+
+    return res.json({
+      success: true,
+      total: groupedData.total,
+      presets: groupedData.grouped
     });
   } catch (err) {
     next(err);
@@ -73,13 +235,18 @@ router.get('/grouped', optionalAuth, (req, res, next) => {
 
 /**
  * EDIT PRESET: PATCH /api/preset/:id or PUT /api/preset/:id
- * Updates preset title or category.
+ * Updates preset title, mainCategory, or subCategory.
  */
 const handleUpdatePreset = (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, category } = req.body;
-    const updated = fileService.updateFile(id, { title, category });
+    const { title, mainCategory, subCategory, category } = req.body;
+    const updated = fileService.updateFile(id, {
+      title,
+      mainCategory,
+      subCategory: subCategory || category,
+      category: subCategory || category
+    });
 
     return res.json({
       success: true,
@@ -112,3 +279,4 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 module.exports = router;
+

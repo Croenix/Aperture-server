@@ -23,6 +23,8 @@ function initSchema() {
       original_name TEXT NOT NULL,
       filename TEXT NOT NULL,
       title TEXT,
+      main_category TEXT NOT NULL DEFAULT 'image',
+      sub_category TEXT NOT NULL DEFAULT 'general',
       category TEXT NOT NULL DEFAULT 'general',
       mime_type TEXT NOT NULL,
       size INTEGER NOT NULL,
@@ -54,6 +56,12 @@ function initSchema() {
     if (!columnNames.includes('category')) {
       db.exec("ALTER TABLE files ADD COLUMN category TEXT NOT NULL DEFAULT 'general';");
     }
+    if (!columnNames.includes('main_category')) {
+      db.exec("ALTER TABLE files ADD COLUMN main_category TEXT NOT NULL DEFAULT 'image';");
+    }
+    if (!columnNames.includes('sub_category')) {
+      db.exec("ALTER TABLE files ADD COLUMN sub_category TEXT NOT NULL DEFAULT 'general';");
+    }
   } catch (err) {
     // Ignore migration error
   }
@@ -61,6 +69,8 @@ function initSchema() {
   // Create indexes safely after tables and columns are guaranteed
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_files_uploaded_at ON files (uploaded_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_files_main_cat ON files (main_category);
+    CREATE INDEX IF NOT EXISTS idx_files_sub_cat ON files (sub_category);
     CREATE INDEX IF NOT EXISTS idx_files_category ON files (category);
     CREATE INDEX IF NOT EXISTS idx_files_is_deleted ON files (is_deleted);
     CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys (is_active);
@@ -116,21 +126,27 @@ const dbOperations = {
   createFile(fileRecord) {
     const stmt = db.prepare(`
       INSERT INTO files (
-        id, original_name, filename, title, category, mime_type, size,
+        id, original_name, filename, title, main_category, sub_category, category, mime_type, size,
         storage_provider, storage_path, storage_metadata,
         uploaded_at, created_by, is_deleted
       ) VALUES (
-        @id, @originalName, @filename, @title, @category, @mimeType, @size,
+        @id, @originalName, @filename, @title, @mainCategory, @subCategory, @category, @mimeType, @size,
         @storageProvider, @storagePath, @storageMetadata,
         @uploadedAt, @createdBy, 0
       )
     `);
+
+    const mainCategory = (fileRecord.mainCategory || fileRecord.main_category || 'image').trim().toLowerCase();
+    const subCategory = (fileRecord.subCategory || fileRecord.sub_category || fileRecord.category || 'general').trim();
+
     stmt.run({
       id: fileRecord.id,
       originalName: fileRecord.originalName,
       filename: fileRecord.filename,
       title: fileRecord.title || fileRecord.originalName,
-      category: fileRecord.category || 'general',
+      mainCategory,
+      subCategory,
+      category: subCategory,
       mimeType: fileRecord.mimeType,
       size: fileRecord.size,
       storageProvider: fileRecord.storageProvider || 'local',
@@ -151,27 +167,38 @@ const dbOperations = {
     return this._mapFileRow(row);
   },
 
-  listFiles({ page = 1, limit = 20, search = '', category = '' } = {}) {
+  listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '' } = {}) {
     const offset = Math.max(0, (page - 1) * limit);
     let countSql = 'SELECT COUNT(*) as total FROM files WHERE is_deleted = 0';
     let querySql = 'SELECT * FROM files WHERE is_deleted = 0';
     const params = [];
     const countParams = [];
 
-    if (category && category.trim() && category.trim().toLowerCase() !== 'all') {
-      const cleanCat = category.trim();
-      countSql += ' AND LOWER(category) = LOWER(?)';
-      querySql += ' AND LOWER(category) = LOWER(?)';
-      countParams.push(cleanCat);
-      params.push(cleanCat);
+    // Filter by main category ('image', 'text', etc.)
+    if (mainCategory && mainCategory.trim() && mainCategory.trim().toLowerCase() !== 'all') {
+      const cleanMain = mainCategory.trim().toLowerCase();
+      countSql += ' AND LOWER(main_category) = LOWER(?)';
+      querySql += ' AND LOWER(main_category) = LOWER(?)';
+      countParams.push(cleanMain);
+      params.push(cleanMain);
     }
 
+    // Filter by subcategory / category
+    const activeSub = (subCategory || category || '').trim();
+    if (activeSub && activeSub.toLowerCase() !== 'all') {
+      countSql += ' AND (LOWER(sub_category) = LOWER(?) OR LOWER(category) = LOWER(?))';
+      querySql += ' AND (LOWER(sub_category) = LOWER(?) OR LOWER(category) = LOWER(?))';
+      countParams.push(activeSub, activeSub);
+      params.push(activeSub, activeSub);
+    }
+
+    // Global Search across title, names, categories, and IDs
     if (search && search.trim()) {
       const searchPattern = `%${search.trim()}%`;
-      countSql += ' AND (original_name LIKE ? OR title LIKE ? OR id LIKE ? OR category LIKE ? OR mime_type LIKE ?)';
-      querySql += ' AND (original_name LIKE ? OR title LIKE ? OR id LIKE ? OR category LIKE ? OR mime_type LIKE ?)';
-      countParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
-      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+      countSql += ' AND (original_name LIKE ? OR title LIKE ? OR id LIKE ? OR sub_category LIKE ? OR main_category LIKE ? OR category LIKE ? OR mime_type LIKE ?)';
+      querySql += ' AND (original_name LIKE ? OR title LIKE ? OR id LIKE ? OR sub_category LIKE ? OR main_category LIKE ? OR category LIKE ? OR mime_type LIKE ?)';
+      countParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
     querySql += ' ORDER BY uploaded_at DESC LIMIT ? OFFSET ?';
@@ -193,13 +220,35 @@ const dbOperations = {
 
   listCategories() {
     const stmt = db.prepare(`
-      SELECT category, COUNT(*) as count 
+      SELECT main_category, sub_category, COUNT(*) as count 
       FROM files 
       WHERE is_deleted = 0 
-      GROUP BY category 
-      ORDER BY count DESC, category ASC
+      GROUP BY main_category, sub_category 
+      ORDER BY main_category ASC, count DESC, sub_category ASC
     `);
-    return stmt.all();
+    const rows = stmt.all();
+
+    // Build hierarchy dictionary
+    const hierarchy = {
+      image: [],
+      text: []
+    };
+
+    rows.forEach(r => {
+      const main = r.main_category || 'image';
+      if (!hierarchy[main]) {
+        hierarchy[main] = [];
+      }
+      hierarchy[main].push({
+        subCategory: r.sub_category,
+        count: r.count
+      });
+    });
+
+    return {
+      raw: rows,
+      hierarchy
+    };
   },
 
   updateFile(id, updates = {}) {
@@ -211,9 +260,17 @@ const dbOperations = {
       params.push(updates.title.trim());
     }
 
-    if (updates.category !== undefined && typeof updates.category === 'string' && updates.category.trim()) {
+    if (updates.mainCategory !== undefined && typeof updates.mainCategory === 'string' && updates.mainCategory.trim()) {
+      fields.push('main_category = ?');
+      params.push(updates.mainCategory.trim().toLowerCase());
+    }
+
+    const newSub = updates.subCategory || updates.category;
+    if (newSub !== undefined && typeof newSub === 'string' && newSub.trim()) {
+      fields.push('sub_category = ?');
       fields.push('category = ?');
-      params.push(updates.category.trim());
+      params.push(newSub.trim());
+      params.push(newSub.trim());
     }
 
     if (fields.length === 0) {
@@ -239,6 +296,28 @@ const dbOperations = {
     const stmt = db.prepare('DELETE FROM files WHERE id = ?');
     const result = stmt.run(id);
     return result.changes > 0;
+  },
+
+  _mapFileRow(row) {
+    const mainCategory = row.main_category || 'image';
+    const subCategory = row.sub_category || row.category || 'general';
+    return {
+      id: row.id,
+      originalName: row.original_name,
+      filename: row.filename,
+      title: row.title || row.original_name,
+      mainCategory,
+      subCategory,
+      category: subCategory, // fallback compatibility
+      mimeType: row.mime_type,
+      size: row.size,
+      storageProvider: row.storage_provider,
+      storagePath: row.storage_path,
+      storageMetadata: row.storage_metadata ? JSON.parse(row.storage_metadata) : null,
+      uploadedAt: row.uploaded_at,
+      createdBy: row.created_by,
+      isDeleted: Boolean(row.is_deleted)
+    };
   },
 
   // API Key operations
@@ -287,24 +366,6 @@ const dbOperations = {
   deleteApiKey(key) {
     const stmt = db.prepare('DELETE FROM api_keys WHERE key = ?');
     return stmt.run(key).changes > 0;
-  },
-
-  _mapFileRow(row) {
-    return {
-      id: row.id,
-      originalName: row.original_name,
-      filename: row.filename,
-      title: row.title || row.original_name,
-      category: row.category || 'general',
-      mimeType: row.mime_type,
-      size: row.size,
-      storageProvider: row.storage_provider,
-      storagePath: row.storage_path,
-      storageMetadata: row.storage_metadata ? JSON.parse(row.storage_metadata) : null,
-      uploadedAt: row.uploaded_at,
-      createdBy: row.created_by,
-      isDeleted: Boolean(row.is_deleted)
-    };
   }
 };
 
