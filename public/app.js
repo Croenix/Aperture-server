@@ -979,8 +979,19 @@
     });
   }
 
+  // Update documentation code snippets to match the actual server host
+  function updateDocsHostUrls() {
+    if (!elements.docsModal) return;
+    const origin = window.location.origin;
+    const codeBlocks = elements.docsModal.querySelectorAll('code');
+    codeBlocks.forEach(code => {
+      code.textContent = code.textContent.replace(/http:\/\/localhost:3000/g, origin);
+    });
+  }
+
   // Initialize
   function init() {
+    updateDocsHostUrls();
     elements.activeKeyName.textContent = state.keyName;
     initEvents();
     setUploadMainCategory('image');

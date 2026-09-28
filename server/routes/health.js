@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const config = require('../config');
 const { db } = require('../database');
+const { getBaseUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
 
@@ -41,7 +42,7 @@ router.get('/', (req, res) => {
     service: {
       name: 'Aperture File Server',
       version: '1.0.0',
-      baseUrl: config.baseUrl,
+      baseUrl: getBaseUrl(req),
       storageProvider: config.storageProvider,
       maxFileSizeMb: config.maxFileSizeMb
     },

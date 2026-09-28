@@ -2,6 +2,7 @@ const express = require('express');
 const fileService = require('../services/fileService');
 const { optionalAuth } = require('../middleware/auth');
 const config = require('../config');
+const { getBaseUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
 
@@ -24,8 +25,8 @@ const DEFAULT_IMAGE_SUBCATEGORIES = [
 /**
  * Helper to map a file record to a clean, focused preset object.
  */
-function toCleanPreset(file) {
-  const base = config.baseUrl;
+function toCleanPreset(file, reqOrBase = null) {
+  const base = getBaseUrl(reqOrBase);
   const mainCategory = file.mainCategory || file.main_category || 'image';
   const subCategory = file.subCategory || file.sub_category || file.category || 'general';
 
@@ -92,9 +93,9 @@ const handleImagePresets = (req, res, next) => {
       search,
       mainCategory: 'image',
       subCategory: subCategory || ''
-    });
+    }, req);
 
-    const presets = result.files.map(toCleanPreset);
+    const presets = result.files.map(p => toCleanPreset(p, req));
 
     // Group by subcategory
     const subGrouped = {};
@@ -136,9 +137,9 @@ const handleTextPresets = (req, res, next) => {
       search,
       mainCategory: 'text',
       subCategory: subCategory || ''
-    });
+    }, req);
 
-    const presets = result.files.map(toCleanPreset);
+    const presets = result.files.map(p => toCleanPreset(p, req));
 
     // Group by subcategory
     const subGrouped = {};
@@ -174,26 +175,26 @@ router.get('/', optionalAuth, (req, res, next) => {
 
     // If specific main category requested
     if (mainCategory && mainCategory.toLowerCase() === 'image') {
-      const result = fileService.listFiles({ page: 1, limit: 1000, search, mainCategory: 'image', subCategory: subCategory || category });
+      const result = fileService.listFiles({ page: 1, limit: 1000, search, mainCategory: 'image', subCategory: subCategory || category }, req);
       return res.json({
         success: true,
         mainCategory: 'image',
-        presets: result.files.map(toCleanPreset)
+        presets: result.files.map(p => toCleanPreset(p, req))
       });
     }
 
     if (mainCategory && mainCategory.toLowerCase() === 'text') {
-      const result = fileService.listFiles({ page: 1, limit: 1000, search, mainCategory: 'text', subCategory: subCategory || category });
+      const result = fileService.listFiles({ page: 1, limit: 1000, search, mainCategory: 'text', subCategory: subCategory || category }, req);
       return res.json({
         success: true,
         mainCategory: 'text',
-        presets: result.files.map(toCleanPreset)
+        presets: result.files.map(p => toCleanPreset(p, req))
       });
     }
 
     // Default: fetch all and return clean separated structure
-    const allResult = fileService.listFiles({ page: 1, limit: 1000, search, subCategory: subCategory || category });
-    const allClean = allResult.files.map(toCleanPreset);
+    const allResult = fileService.listFiles({ page: 1, limit: 1000, search, subCategory: subCategory || category }, req);
+    const allClean = allResult.files.map(p => toCleanPreset(p, req));
 
     const imagePresets = allClean.filter(p => p.mainCategory === 'image');
     const textPresets = allClean.filter(p => p.mainCategory === 'text');
@@ -221,7 +222,7 @@ router.get('/', optionalAuth, (req, res, next) => {
 router.get('/grouped', optionalAuth, (req, res, next) => {
   try {
     const { search } = req.query;
-    const groupedData = fileService.getGroupedPresets({ search });
+    const groupedData = fileService.getGroupedPresets({ search }, req);
 
     return res.json({
       success: true,
@@ -246,12 +247,12 @@ const handleUpdatePreset = (req, res, next) => {
       mainCategory,
       subCategory: subCategory || category,
       category: subCategory || category
-    });
+    }, req);
 
     return res.json({
       success: true,
       message: `Preset '${id}' updated successfully.`,
-      preset: toCleanPreset(updated)
+      preset: toCleanPreset(updated, req)
     });
   } catch (err) {
     next(err);

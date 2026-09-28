@@ -89,7 +89,8 @@ router.post(
           subCategory: req.body.subCategory || req.body.sub_category || req.body.category,
           category: req.body.subCategory || req.body.sub_category || req.body.category
         },
-        req.apiKeyInfo
+        req.apiKeyInfo,
+        req
       );
 
       return res.status(201).json({
@@ -143,7 +144,7 @@ router.get(
         limit,
         search,
         category: req.params.category
-      });
+      }, req);
       return res.json({
         success: true,
         category: req.params.category,
@@ -167,7 +168,7 @@ router.get(
   (req, res, next) => {
     try {
       const { page, limit, search, category } = req.query;
-      const result = fileService.listFiles({ page, limit, search, category });
+      const result = fileService.listFiles({ page, limit, search, category }, req);
       return res.json({
         success: true,
         files: result.files,
@@ -189,7 +190,7 @@ router.get(
   requirePermission('files:read'),
   (req, res, next) => {
     try {
-      const fileData = fileService.getFileMetadata(req.params.id);
+      const fileData = fileService.getFileMetadata(req.params.id, req);
       return res.json({
         success: true,
         file: fileData
@@ -284,7 +285,7 @@ const handleUpdateFile = (req, res, next) => {
       mainCategory,
       subCategory: subCategory || category,
       category: subCategory || category
-    });
+    }, req);
     return res.json({
       success: true,
       message: `File '${fileId}' updated successfully.`,

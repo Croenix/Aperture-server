@@ -3,6 +3,7 @@ const config = require('../config');
 const db = require('../database');
 const { getStorageProvider } = require('./storageService');
 const { generateFileId, isValidFileId, sanitizeOriginalFilename } = require('../utils/fileId');
+const { getBaseUrl } = require('../utils/urlHelper');
 
 class FileService {
   /**
@@ -21,11 +22,12 @@ class FileService {
    * Formats a database record into the standard public file JSON format.
    * Includes title, mainCategory, subCategory, and direct access URLs.
    * @param {Object} record - Database file record
+   * @param {Object|string} [reqOrBase] - Express request or custom base URL
    * @returns {Object} Standardized file JSON
    */
-  formatFileResponse(record) {
+  formatFileResponse(record, reqOrBase = null) {
     if (!record) return null;
-    const base = config.baseUrl;
+    const base = getBaseUrl(reqOrBase);
     const sizeFormatted = this._formatBytes(record.size);
     const mainCategory = record.mainCategory || record.main_category || 'image';
     const subCategory = record.subCategory || record.sub_category || record.category || 'general';
@@ -57,9 +59,10 @@ class FileService {
    * @param {Object} multerFile - File object provided by Multer
    * @param {Object} metadata - Optional custom metadata { title, mainCategory, subCategory, category }
    * @param {Object} apiKeyInfo - API Key details (if authenticated)
+   * @param {Object|string} [reqOrBase] - Express request or custom base URL
    * @returns {Promise<Object>} Formatted file object
    */
-  async processUpload(multerFile, metadata = {}, apiKeyInfo = null) {
+  async processUpload(multerFile, metadata = {}, apiKeyInfo = null, reqOrBase = null) {
     if (!multerFile) {
       const error = new Error('No file was provided in the upload request.');
       error.code = 'NO_FILE_PROVIDED';
@@ -110,15 +113,16 @@ class FileService {
       createdBy: apiKeyInfo ? apiKeyInfo.name : 'api'
     });
 
-    return this.formatFileResponse(fileRecord);
+    return this.formatFileResponse(fileRecord, reqOrBase);
   }
 
   /**
    * Retrieves file metadata by ID.
    * @param {string} fileId
+   * @param {Object|string} [reqOrBase]
    * @returns {Object}
    */
-  getFileMetadata(fileId) {
+  getFileMetadata(fileId, reqOrBase = null) {
     if (!isValidFileId(fileId)) {
       const error = new Error('Invalid file ID format.');
       error.code = 'INVALID_FILE_ID';
@@ -134,7 +138,7 @@ class FileService {
       throw error;
     }
 
-    return this.formatFileResponse(fileRecord);
+    return this.formatFileResponse(fileRecord, reqOrBase);
   }
 
   /**
@@ -177,15 +181,16 @@ class FileService {
   /**
    * Lists files with pagination, search, and two-level category filtering.
    * @param {Object} queryParams
+   * @param {Object|string} [reqOrBase]
    * @returns {Object}
    */
-  listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '' } = {}) {
+  listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '' } = {}, reqOrBase = null) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(1000, Math.max(1, parseInt(limit, 10) || 20));
 
     const result = db.listFiles({ page: pageNum, limit: limitNum, search, category, mainCategory, subCategory });
     return {
-      files: result.files.map(f => this.formatFileResponse(f)),
+      files: result.files.map(f => this.formatFileResponse(f, reqOrBase)),
       pagination: result.pagination
     };
   }
@@ -200,11 +205,12 @@ class FileService {
   /**
    * Retrieves files/presets grouped by main and subcategories.
    * @param {Object} queryParams
+   * @param {Object|string} [reqOrBase]
    * @returns {Object} Grouped presets structure
    */
-  getGroupedPresets({ search = '', mainCategory = '' } = {}) {
+  getGroupedPresets({ search = '', mainCategory = '' } = {}, reqOrBase = null) {
     const allFilesResult = db.listFiles({ page: 1, limit: 1000, search, mainCategory });
-    const formatted = allFilesResult.files.map(f => this.formatFileResponse(f));
+    const formatted = allFilesResult.files.map(f => this.formatFileResponse(f, reqOrBase));
 
     const grouped = {
       image: {},
@@ -233,9 +239,10 @@ class FileService {
    * Updates metadata (title, mainCategory, subCategory) for an existing file.
    * @param {string} fileId 
    * @param {Object} updates { title, mainCategory, subCategory, category }
+   * @param {Object|string} [reqOrBase]
    * @returns {Object} Updated file response
    */
-  updateFile(fileId, updates = {}) {
+  updateFile(fileId, updates = {}, reqOrBase = null) {
     this.getFileRecord(fileId); // ensure file exists and valid ID
 
     const updated = db.updateFile(fileId, updates);
@@ -245,7 +252,7 @@ class FileService {
       error.status = 500;
       throw error;
     }
-    return this.formatFileResponse(updated);
+    return this.formatFileResponse(updated, reqOrBase);
   }
 
   /**

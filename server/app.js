@@ -13,8 +13,8 @@ const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
-// Trust reverse proxies (e.g. Nginx, Cloudflare, Heroku)
-app.set('trust proxy', 1);
+// Trust reverse proxies (e.g. Nginx, Cloudflare, Heroku, Traefik, Caddy)
+app.set('trust proxy', true);
 
 // Security HTTP Headers with Helmet
 app.use(
@@ -57,6 +57,7 @@ const apiLimiter = rateLimit({
   max: config.rateLimitMax,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
   handler: (req, res) => {
     res.status(429).json({
       success: false,

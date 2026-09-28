@@ -9,9 +9,11 @@ const parseNumber = (val, fallback) => {
   return isNaN(parsed) ? fallback : parsed;
 };
 
+const port = parseNumber(process.env.PORT, 3000);
+
 const config = {
-  port: parseNumber(process.env.PORT, 3000),
-  baseUrl: process.env.BASE_URL ? process.env.BASE_URL.replace(/\/+$/, '') : 'http://localhost:3000',
+  port,
+  baseUrl: process.env.BASE_URL ? process.env.BASE_URL.replace(/\/+$/, '') : `http://localhost:${port}`,
   maxFileSizeMb: parseNumber(process.env.MAX_FILE_SIZE_MB, 100),
   get maxFileSizeBytes() {
     return this.maxFileSizeMb * 1024 * 1024;
