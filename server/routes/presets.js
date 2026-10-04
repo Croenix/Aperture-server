@@ -201,6 +201,37 @@ router.get('/grouped', optionalAuth, async (req, res, next) => {
   }
 });
 
+router.get('/:id', optionalAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (id.startsWith('f_')) {
+      const fileData = await fileService.getFileMetadata(id, req);
+      return res.json({
+        success: true,
+        preset: toCleanPreset(fileData, req)
+      });
+    }
+
+    const result = await fileService.listFiles({
+      page: 1,
+      limit: 1000,
+      subCategory: id
+    }, req);
+
+    const presets = result.files.map(p => toCleanPreset(p, req));
+
+    return res.json({
+      success: true,
+      subCategory: id,
+      count: presets.length,
+      presets: presets
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 const handleUpdatePreset = async (req, res, next) => {
   try {
     const { id } = req.params;

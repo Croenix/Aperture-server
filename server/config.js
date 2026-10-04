@@ -13,6 +13,8 @@ const port = parseNumber(process.env.PORT, 3000);
 
 const config = {
   port,
+  debug: process.env.DEBUG !== 'false',
+  logLevel: process.env.LOG_LEVEL || 'DEBUG',
   baseUrl: process.env.BASE_URL ? process.env.BASE_URL.replace(/\/+$/, '') : `http://localhost:${port}`,
   maxFileSizeMb: parseNumber(process.env.MAX_FILE_SIZE_MB, 100),
   get maxFileSizeBytes() {

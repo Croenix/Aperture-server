@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const config = require('../config');
 const fileService = require('../services/fileService');
-const { authenticateApiKey } = require('../middleware/auth');
+const { authenticateApiKey, optionalAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { getSafeExtension } = require('../utils/fileId');
 
@@ -106,8 +106,7 @@ router.post(
  */
 router.get(
   '/categories',
-  authenticateApiKey,
-  requirePermission('files:read'),
+  optionalAuth,
   async (req, res, next) => {
     try {
       const categories = await fileService.listCategories();
@@ -126,8 +125,7 @@ router.get(
  */
 router.get(
   '/category/:category',
-  authenticateApiKey,
-  requirePermission('files:read'),
+  optionalAuth,
   async (req, res, next) => {
     try {
       const { page, limit, search } = req.query;
@@ -154,8 +152,7 @@ router.get(
  */
 router.get(
   '/',
-  authenticateApiKey,
-  requirePermission('files:read'),
+  optionalAuth,
   async (req, res, next) => {
     try {
       const { page, limit, search, category, mainCategory, subCategory, isPremium, pricing } = req.query;
@@ -176,8 +173,7 @@ router.get(
  */
 router.get(
   '/:id',
-  authenticateApiKey,
-  requirePermission('files:read'),
+  optionalAuth,
   async (req, res, next) => {
     try {
       const fileData = await fileService.getFileMetadata(req.params.id, req);

@@ -3,6 +3,7 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const logger = require('./utils/logger');
 
 // Initialize Mongoose Schema for MongoDB Atlas
 const fileSchema = new mongoose.Schema({
@@ -46,15 +47,16 @@ if (config.mongodbUri) {
     serverSelectionTimeoutMS: 10000
   };
 
+  logger.debug('Connecting to MongoDB Atlas...', { uri: config.mongodbUri.replace(/:[^:@]+@/, ':****@') });
   mongoose.connect(config.mongodbUri, mongoOpts)
     .then(() => {
-      console.log('🍃 MongoDB Atlas Connected Successfully!');
+      logger.info('🍃 MongoDB Atlas Connected Successfully!');
       seedMongoApiKeys();
       syncSqliteToMongo();
     })
     .catch(err => {
-      console.error('⚠️ MongoDB Atlas Connection Warning:', err.message);
-      console.log('🔄 Operating with local database engine & Cloudinary storage fallback.');
+      logger.warn('⚠️ MongoDB Atlas Connection Warning:', err.message);
+      logger.info('🔄 Operating with local database engine & Cloudinary storage fallback.');
     });
 }
 
@@ -99,6 +101,31 @@ function initSqliteSchema() {
       is_active INTEGER NOT NULL DEFAULT 1
     );
   `);
+
+  // Migration check: Ensure missing columns are added if an existing sqlite DB was initialized with an older schema
+  const existingColumns = db.prepare(`PRAGMA table_info(files)`).all().map(c => c.name);
+  const requiredColumns = [
+    { name: 'title', type: 'TEXT' },
+    { name: 'main_category', type: "TEXT NOT NULL DEFAULT 'image'" },
+    { name: 'sub_category', type: "TEXT NOT NULL DEFAULT 'general'" },
+    { name: 'category', type: "TEXT NOT NULL DEFAULT 'general'" },
+    { name: 'format', type: 'TEXT' },
+    { name: 'direct_url', type: 'TEXT' },
+    { name: 'storage_metadata', type: 'TEXT' },
+    { name: 'is_premium', type: 'INTEGER NOT NULL DEFAULT 0' }
+  ];
+
+  for (const col of requiredColumns) {
+    if (!existingColumns.includes(col.name)) {
+      try {
+        db.exec(`ALTER TABLE files ADD COLUMN ${col.name} ${col.type}`);
+        logger.info(`Migrated SQLite table 'files': Added missing column '${col.name}'`);
+      } catch (colErr) {
+        logger.warn(`Failed to alter table files for column '${col.name}':`, colErr.message);
+      }
+    }
+  }
+
   seedSqliteApiKeys();
 }
 
@@ -174,6 +201,15 @@ async function syncSqliteToMongo() {
   }
 }
 
+function escapeRegex(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function isMongoActive() {
+  return Boolean(config.mongodbUri) && (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2);
+}
+
 initSqliteSchema();
 
 function _mapRecord(docOrRow) {
@@ -242,8 +278,12 @@ const dbOperations = {
       isDeleted: false
     };
 
-    if (mongoose.connection.readyState === 1) {
-      await FileModel.create(recordData);
+    if (isMongoActive()) {
+      try {
+        await FileModel.create(recordData);
+      } catch (err) {
+        console.warn('⚠️ MongoDB createFile failed, continuing with SQLite:', err.message);
+      }
     }
 
     const stmt = db.prepare(`
@@ -268,9 +308,13 @@ const dbOperations = {
   },
 
   async getFileById(id) {
-    if (mongoose.connection.readyState === 1) {
-      const doc = await FileModel.findOne({ id, isDeleted: false });
-      if (doc) return _mapRecord(doc);
+    if (isMongoActive()) {
+      try {
+        const doc = await FileModel.findOne({ id, isDeleted: false });
+        if (doc) return _mapRecord(doc);
+      } catch (err) {
+        console.warn('⚠️ MongoDB getFileById failed, falling back to SQLite:', err.message);
+      }
     }
     const stmt = db.prepare(`SELECT * FROM files WHERE id = ? AND is_deleted = 0`);
     const row = stmt.get(id);
@@ -279,58 +323,64 @@ const dbOperations = {
   },
 
   async listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '', isPremium, pricing } = {}) {
-    if (mongoose.connection.readyState === 1) {
-      const query = { isDeleted: false };
+    if (isMongoActive()) {
+      try {
+        const query = { isDeleted: false };
 
-      if (mainCategory && mainCategory.trim() && mainCategory.trim().toLowerCase() !== 'all') {
-        query.mainCategory = new RegExp(`^${mainCategory.trim()}$`, 'i');
-      }
-
-      const activeSub = (subCategory || category || '').trim();
-      if (activeSub && activeSub.toLowerCase() !== 'all') {
-        query.$or = [
-          { subCategory: new RegExp(`^${activeSub}$`, 'i') },
-          { category: new RegExp(`^${activeSub}$`, 'i') }
-        ];
-      }
-
-      const targetPremium = isPremium !== undefined ? isPremium : (pricing !== undefined ? (pricing === 'Paid' || pricing === 'paid' || pricing === 'true' || pricing === '1') : undefined);
-      if (targetPremium !== undefined && targetPremium !== null && targetPremium !== 'all') {
-        query.isPremium = (targetPremium === true || targetPremium === 'true' || targetPremium === 1 || targetPremium === '1');
-      }
-
-      if (search && search.trim()) {
-        const regex = new RegExp(search.trim(), 'i');
-        const searchOr = [
-          { originalName: regex },
-          { title: regex },
-          { id: regex },
-          { subCategory: regex },
-          { mainCategory: regex },
-          { category: regex },
-          { mimeType: regex }
-        ];
-        if (query.$or) {
-          query.$and = [{ $or: query.$or }, { $or: searchOr }];
-          delete query.$or;
-        } else {
-          query.$or = searchOr;
+        if (mainCategory && mainCategory.trim() && mainCategory.trim().toLowerCase() !== 'all') {
+          query.mainCategory = new RegExp(`^${escapeRegex(mainCategory.trim())}$`, 'i');
         }
-      }
 
-      const skip = Math.max(0, (page - 1) * limit);
-      const total = await FileModel.countDocuments(query);
-      const docs = await FileModel.find(query).sort({ uploadedAt: -1 }).skip(skip).limit(limit);
-
-      return {
-        files: docs.map(d => _mapRecord(d)),
-        pagination: {
-          page: Number(page),
-          limit: Number(limit),
-          total,
-          totalPages: Math.ceil(total / limit) || 1
+        const activeSub = (subCategory || category || '').trim();
+        if (activeSub && activeSub.toLowerCase() !== 'all') {
+          const safeSub = escapeRegex(activeSub);
+          query.$or = [
+            { subCategory: new RegExp(`^${safeSub}$`, 'i') },
+            { category: new RegExp(`^${safeSub}$`, 'i') }
+          ];
         }
-      };
+
+        const targetPremium = isPremium !== undefined ? isPremium : (pricing !== undefined ? (pricing === 'Paid' || pricing === 'paid' || pricing === 'true' || pricing === '1') : undefined);
+        if (targetPremium !== undefined && targetPremium !== null && targetPremium !== 'all') {
+          query.isPremium = (targetPremium === true || targetPremium === 'true' || targetPremium === 1 || targetPremium === '1');
+        }
+
+        if (search && search.trim()) {
+          const safeSearch = escapeRegex(search.trim());
+          const regex = new RegExp(safeSearch, 'i');
+          const searchOr = [
+            { originalName: regex },
+            { title: regex },
+            { id: regex },
+            { subCategory: regex },
+            { mainCategory: regex },
+            { category: regex },
+            { mimeType: regex }
+          ];
+          if (query.$or) {
+            query.$and = [{ $or: query.$or }, { $or: searchOr }];
+            delete query.$or;
+          } else {
+            query.$or = searchOr;
+          }
+        }
+
+        const skip = Math.max(0, (page - 1) * limit);
+        const total = await FileModel.countDocuments(query);
+        const docs = await FileModel.find(query).sort({ uploadedAt: -1 }).skip(skip).limit(limit);
+
+        return {
+          files: docs.map(d => _mapRecord(d)),
+          pagination: {
+            page: Number(page),
+            limit: Number(limit),
+            total,
+            totalPages: Math.ceil(total / limit) || 1
+          }
+        };
+      } catch (err) {
+        console.warn('⚠️ MongoDB listFiles query error, falling back to SQLite:', err.message);
+      }
     }
 
     const offset = Math.max(0, (page - 1) * limit);
@@ -390,25 +440,29 @@ const dbOperations = {
   },
 
   async listCategories() {
-    if (mongoose.connection.readyState === 1) {
-      const docs = await FileModel.aggregate([
-        { $match: { isDeleted: false } },
-        { $group: { _id: { mainCategory: "$mainCategory", subCategory: "$subCategory" }, count: { $sum: 1 } } },
-        { $sort: { "_id.mainCategory": 1, count: -1 } }
-      ]);
+    if (isMongoActive()) {
+      try {
+        const docs = await FileModel.aggregate([
+          { $match: { isDeleted: false } },
+          { $group: { _id: { mainCategory: "$mainCategory", subCategory: "$subCategory" }, count: { $sum: 1 } } },
+          { $sort: { "_id.mainCategory": 1, count: -1 } }
+        ]);
 
-      const hierarchy = { image: [], text: [], font: [], sticker: [] };
-      const raw = [];
+        const hierarchy = { image: [], text: [], font: [], sticker: [] };
+        const raw = [];
 
-      docs.forEach(d => {
-        const main = d._id.mainCategory || 'image';
-        const sub = d._id.subCategory || 'general';
-        if (!hierarchy[main]) hierarchy[main] = [];
-        hierarchy[main].push({ subCategory: sub, count: d.count });
-        raw.push({ main_category: main, sub_category: sub, count: d.count });
-      });
+        docs.forEach(d => {
+          const main = d._id.mainCategory || 'image';
+          const sub = d._id.subCategory || 'general';
+          if (!hierarchy[main]) hierarchy[main] = [];
+          hierarchy[main].push({ subCategory: sub, count: d.count });
+          raw.push({ main_category: main, sub_category: sub, count: d.count });
+        });
 
-      return { raw, hierarchy };
+        return { raw, hierarchy };
+      } catch (err) {
+        console.warn('⚠️ MongoDB listCategories failed, falling back to SQLite:', err.message);
+      }
     }
 
     const stmt = db.prepare(`
@@ -471,8 +525,12 @@ const dbOperations = {
       }
     }
 
-    if (mongoose.connection.readyState === 1 && Object.keys(mongoUpdates).length > 0) {
-      await FileModel.updateOne({ id }, { $set: mongoUpdates });
+    if (isMongoActive() && Object.keys(mongoUpdates).length > 0) {
+      try {
+        await FileModel.updateOne({ id }, { $set: mongoUpdates });
+      } catch (err) {
+        console.warn('⚠️ MongoDB updateFile failed, continuing with SQLite:', err.message);
+      }
     }
 
     if (fields.length > 0) {
@@ -485,16 +543,24 @@ const dbOperations = {
   },
 
   async softDeleteFile(id) {
-    if (mongoose.connection.readyState === 1) {
-      await FileModel.updateOne({ id }, { $set: { isDeleted: true } });
+    if (isMongoActive()) {
+      try {
+        await FileModel.updateOne({ id }, { $set: { isDeleted: true } });
+      } catch (err) {
+        console.warn('⚠️ MongoDB softDeleteFile failed:', err.message);
+      }
     }
     const stmt = db.prepare('UPDATE files SET is_deleted = 1 WHERE id = ?');
     return stmt.run(id).changes > 0;
   },
 
   async hardDeleteFile(id) {
-    if (mongoose.connection.readyState === 1) {
-      await FileModel.deleteOne({ id });
+    if (isMongoActive()) {
+      try {
+        await FileModel.deleteOne({ id });
+      } catch (err) {
+        console.warn('⚠️ MongoDB hardDeleteFile failed:', err.message);
+      }
     }
     const stmt = db.prepare('DELETE FROM files WHERE id = ?');
     return stmt.run(id).changes > 0;
@@ -502,17 +568,21 @@ const dbOperations = {
 
   async getApiKey(key) {
     if (!key) return null;
-    if (mongoose.connection.readyState === 1) {
-      const doc = await ApiKeyModel.findOne({ key, isActive: true });
-      if (doc) {
-        return {
-          key: doc.key,
-          name: doc.name,
-          permissions: doc.permissions,
-          createdAt: doc.createdAt,
-          lastUsedAt: doc.lastUsedAt,
-          isActive: doc.isActive
-        };
+    if (isMongoActive()) {
+      try {
+        const doc = await ApiKeyModel.findOne({ key, isActive: true });
+        if (doc) {
+          return {
+            key: doc.key,
+            name: doc.name,
+            permissions: doc.permissions,
+            createdAt: doc.createdAt,
+            lastUsedAt: doc.lastUsedAt,
+            isActive: doc.isActive
+          };
+        }
+      } catch (err) {
+        console.warn('⚠️ MongoDB getApiKey failed, falling back to SQLite:', err.message);
       }
     }
 
@@ -531,24 +601,30 @@ const dbOperations = {
 
   async updateApiKeyUsage(key) {
     const now = new Date().toISOString();
-    if (mongoose.connection.readyState === 1) {
-      await ApiKeyModel.updateOne({ key }, { $set: { lastUsedAt: now } });
+    if (isMongoActive()) {
+      try {
+        await ApiKeyModel.updateOne({ key }, { $set: { lastUsedAt: now } });
+      } catch (err) {}
     }
     const stmt = db.prepare('UPDATE api_keys SET last_used_at = ? WHERE key = ?');
     stmt.run(now, key);
   },
 
   async listApiKeys() {
-    if (mongoose.connection.readyState === 1) {
-      const docs = await ApiKeyModel.find({}).sort({ createdAt: -1 });
-      return docs.map(d => ({
-        key: d.key,
-        name: d.name,
-        permissions: d.permissions,
-        createdAt: d.createdAt,
-        lastUsedAt: d.lastUsedAt,
-        isActive: d.isActive
-      }));
+    if (isMongoActive()) {
+      try {
+        const docs = await ApiKeyModel.find({}).sort({ createdAt: -1 });
+        return docs.map(d => ({
+          key: d.key,
+          name: d.name,
+          permissions: d.permissions,
+          createdAt: d.createdAt,
+          lastUsedAt: d.lastUsedAt,
+          isActive: d.isActive
+        }));
+      } catch (err) {
+        console.warn('⚠️ MongoDB listApiKeys failed, falling back to SQLite:', err.message);
+      }
     }
 
     const stmt = db.prepare('SELECT key, name, permissions, created_at, last_used_at, is_active FROM api_keys ORDER BY created_at DESC');
@@ -565,8 +641,10 @@ const dbOperations = {
 
   async createApiKey({ key, name, permissions }) {
     const now = new Date().toISOString();
-    if (mongoose.connection.readyState === 1) {
-      await ApiKeyModel.create({ key, name, permissions, createdAt: now, isActive: true });
+    if (isMongoActive()) {
+      try {
+        await ApiKeyModel.create({ key, name, permissions, createdAt: now, isActive: true });
+      } catch (err) {}
     }
     const stmt = db.prepare(`
       INSERT INTO api_keys (key, name, permissions, created_at, is_active)
@@ -577,8 +655,10 @@ const dbOperations = {
   },
 
   async deleteApiKey(key) {
-    if (mongoose.connection.readyState === 1) {
-      await ApiKeyModel.deleteOne({ key });
+    if (isMongoActive()) {
+      try {
+        await ApiKeyModel.deleteOne({ key });
+      } catch (err) {}
     }
     const stmt = db.prepare('DELETE FROM api_keys WHERE key = ?');
     return stmt.run(key).changes > 0;

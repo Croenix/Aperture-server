@@ -1,10 +1,12 @@
 const multer = require('multer');
 const config = require('../config');
+const logger = require('../utils/logger');
 
 /**
  * Global 404 Not Found Middleware for unmatched routes.
  */
 function notFoundHandler(req, res, next) {
+  logger.warn(`Route Not Found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
     error: {
@@ -18,6 +20,9 @@ function notFoundHandler(req, res, next) {
  * Global Central Error Handler Middleware.
  */
 function errorHandler(err, req, res, next) {
+  // Log full error stack & request details
+  logger.error(`Error processing ${req.method} ${req.originalUrl}: ${err.message}`, err);
+
   // If response headers already sent, delegate to default Express handler
   if (res.headersSent) {
     return next(err);
@@ -68,18 +73,24 @@ function errorHandler(err, req, res, next) {
   const errorCode = err.code || (statusCode === 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_ERROR');
   const message = err.message || 'An unexpected error occurred on the server.';
 
-  // In production, mask internal error details if 500
   const isProduction = process.env.NODE_ENV === 'production';
   const responseMessage = (statusCode === 500 && isProduction)
     ? 'An internal server error occurred.'
     : message;
 
+  const errorResponse = {
+    code: errorCode,
+    message: responseMessage
+  };
+
+  // Add stack trace in debug mode or non-production
+  if (config.debug || process.env.DEBUG === 'true' || !isProduction) {
+    errorResponse.stack = err.stack ? err.stack.split('\n') : undefined;
+  }
+
   return res.status(statusCode).json({
     success: false,
-    error: {
-      code: errorCode,
-      message: responseMessage
-    }
+    error: errorResponse
   });
 }
 

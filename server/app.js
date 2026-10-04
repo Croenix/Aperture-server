@@ -12,11 +12,15 @@ const { streamFileResponse } = require('./routes/files');
 const healthRouter = require('./routes/health');
 const keysRouter = require('./routes/keys');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
+const { requestLogger } = require('./middleware/loggerMiddleware');
 
 const app = express();
 
 // Trust reverse proxies (e.g. Nginx, Cloudflare, Heroku, Traefik, Caddy)
 app.set('trust proxy', true);
+
+// Request Debug Logging Middleware
+app.use(requestLogger);
 
 // Security HTTP Headers with Helmet
 app.use(
@@ -70,6 +74,9 @@ const apiLimiter = rateLimit({
     });
   }
 });
+
+// Serve Favicon (avoid 404 console errors)
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 // Serve Static Frontend UI
 app.use(express.static(path.join(__dirname, '../public')));
