@@ -32,12 +32,17 @@ class FileService {
     const mainCategory = record.mainCategory || record.main_category || 'image';
     const subCategory = record.subCategory || record.sub_category || record.category || 'general';
 
+    const isPremium = Boolean(record.isPremium || record.is_premium);
+
     return {
       id: record.id,
       title: record.title || record.originalName,
       mainCategory,
       subCategory,
       category: subCategory, // synced alias
+      isPremium,
+      premium: isPremium ? 'Yes' : 'No',
+      pricing: isPremium ? 'Paid' : 'Free',
       originalName: record.originalName,
       filename: record.filename,
       mimeType: record.mimeType,
@@ -104,6 +109,7 @@ class FileService {
       title: customTitle,
       mainCategory,
       subCategory,
+      isPremium: metadata.isPremium || metadata.is_premium || metadata.pricing === 'Paid' || metadata.pricing === 'paid' || metadata.premium === 'Yes' || metadata.premium === 'yes' || metadata.premium === true,
       mimeType,
       size: saveResult.size || multerFile.size,
       storageProvider: config.storageProvider,
@@ -184,11 +190,11 @@ class FileService {
    * @param {Object|string} [reqOrBase]
    * @returns {Object}
    */
-  listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '' } = {}, reqOrBase = null) {
+  listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '', isPremium, pricing } = {}, reqOrBase = null) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(1000, Math.max(1, parseInt(limit, 10) || 20));
 
-    const result = db.listFiles({ page: pageNum, limit: limitNum, search, category, mainCategory, subCategory });
+    const result = db.listFiles({ page: pageNum, limit: limitNum, search, category, mainCategory, subCategory, isPremium, pricing });
     return {
       files: result.files.map(f => this.formatFileResponse(f, reqOrBase)),
       pagination: result.pagination

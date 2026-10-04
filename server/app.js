@@ -6,6 +6,8 @@ const path = require('path');
 const config = require('./config');
 const filesRouter = require('./routes/files');
 const presetsRouter = require('./routes/presets');
+const fontsRouter = require('./routes/fonts');
+const stickersRouter = require('./routes/stickers');
 const { streamFileResponse } = require('./routes/files');
 const healthRouter = require('./routes/health');
 const keysRouter = require('./routes/keys');
@@ -90,6 +92,20 @@ app.use('/api/presets', apiLimiter, presetsRouter);
 app.use('/api/preset', apiLimiter, presetsRouter);
 app.use('/presets', apiLimiter, presetsRouter);
 app.use('/preset', apiLimiter, presetsRouter);
+
+app.use('/api/v1/fonts', apiLimiter, fontsRouter);
+app.use('/api/v1/font', apiLimiter, fontsRouter);
+app.use('/api/fonts', apiLimiter, fontsRouter);
+app.use('/api/font', apiLimiter, fontsRouter);
+app.use('/fonts', apiLimiter, fontsRouter);
+app.use('/font', apiLimiter, fontsRouter);
+
+app.use('/api/v1/stickers', apiLimiter, stickersRouter);
+app.use('/api/v1/sticker', apiLimiter, stickersRouter);
+app.use('/api/stickers', apiLimiter, stickersRouter);
+app.use('/api/sticker', apiLimiter, stickersRouter);
+app.use('/stickers', apiLimiter, stickersRouter);
+app.use('/sticker', apiLimiter, stickersRouter);
 
 app.use('/api/v1/files', apiLimiter, filesRouter);
 app.use('/api/v1/health', healthRouter);

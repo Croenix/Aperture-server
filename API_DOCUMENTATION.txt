@@ -574,6 +574,144 @@ Common Error Codes:
 - `FILE_TOO_LARGE` (413): File exceeded maximum allowed limit (100 MB).
 - `RATE_LIMIT_EXCEEDED` (429): Exceeded rate limit (300 requests per 15 min).
 
+
+================================================================================
+7. FONT API ENDPOINTS & SCHEMAS
+================================================================================
+
+7.1 UPLOAD FONT FILE
+--------------------------------------------------------------------------------
+Endpoint:
+  POST /api/fonts or POST /api/v1/fonts
+
+Headers:
+  Authorization: Bearer <API_KEY> (Optional if unauthenticated upload is allowed)
+
+Multipart Form-Data Fields:
+  - file (or fontFile): Font binary file (.ttf, .otf, .woff, .woff2, .eot)
+  - name (or fontName / title): Display Name of the Font (e.g. "Roboto Bold", "Montserrat ExtraBold")
+  - category (or subCategory / fontType): Font subcategory: "Free" or "Paid"
+
+cURL Example:
+  curl -X POST "https://aperture-server.onrender.com/api/fonts" \
+    -H "Authorization: Bearer aperture_upl_secret_key_2026" \
+    -F "file=@/path/to/Roboto-Bold.ttf" \
+    -F "name=Roboto Bold" \
+    -F "subCategory=Free"
+
+Sample JSON Response:
+{
+  "success": true,
+  "message": "Font uploaded successfully.",
+  "font": {
+    "id": "f_9a81b2c3d4e5",
+    "name": "Roboto Bold",
+    "title": "Roboto Bold",
+    "mainCategory": "font",
+    "subCategory": "Free",
+    "category": "Free",
+    "fontUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5",
+    "fileUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5",
+    "downloadUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5/download",
+    "viewUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5/view",
+    "fileName": "Roboto-Bold.ttf",
+    "fileSize": 165432,
+    "sizeFormatted": "161.55 KB",
+    "uploadedAt": "2026-10-04T21:50:00.000Z"
+  }
+}
+
+7.2 GET ALL FONTS
+--------------------------------------------------------------------------------
+Endpoint:
+  GET /api/fonts or GET /api/fonts/:subCategory
+
+Optional Query Parameters:
+  ?search=Roboto
+  ?subCategory=Free
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/fonts"
+# Filter by Free fonts:
+  curl -X GET "https://aperture-server.onrender.com/api/fonts/Free"
+
+7.3 GET FONT CATEGORIES
+--------------------------------------------------------------------------------
+Endpoint:
+  GET /api/fonts/categories
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/fonts/categories"
+
+
+================================================================================
+8. STICKER API ENDPOINTS & SCHEMAS
+================================================================================
+
+8.1 UPLOAD STICKER FILE
+--------------------------------------------------------------------------------
+Endpoint:
+  POST /api/stickers or POST /api/v1/stickers
+
+Headers:
+  Authorization: Bearer <API_KEY> (Optional if unauthenticated upload is allowed)
+
+Multipart Form-Data Fields:
+  - file (or stickerFile): Sticker image file (.svg, .png, .webp, .jpg)
+  - name (or stickerName / title): Display Name of the Sticker (e.g. "Golden Star Badge", "Verified Icon")
+  - category (or subCategory / stickerCategory): Sticker category (e.g. "Badges", "Emoji", "Decorative", "Icons", "Anime", "Vectors")
+
+cURL Example:
+  curl -X POST "https://aperture-server.onrender.com/api/stickers" \
+    -H "Authorization: Bearer aperture_upl_secret_key_2026" \
+    -F "file=@/path/to/golden_star.svg" \
+    -F "name=Golden Star Badge" \
+    -F "category=Badges"
+
+Sample JSON Response:
+{
+  "success": true,
+  "message": "Sticker uploaded successfully.",
+  "sticker": {
+    "id": "f_7b6a5c4d3e2f",
+    "name": "Golden Star Badge",
+    "title": "Golden Star Badge",
+    "mainCategory": "sticker",
+    "subCategory": "Badges",
+    "category": "Badges",
+    "stickerUrl": "https://aperture-server.onrender.com/files/f_7b6a5c4d3e2f",
+    "fileUrl": "https://aperture-server.onrender.com/files/f_7b6a5c4d3e2f",
+    "downloadUrl": "https://aperture-server.onrender.com/files/f_7b6a5c4d3e2f/download",
+    "viewUrl": "https://aperture-server.onrender.com/files/f_7b6a5c4d3e2f/view",
+    "fileName": "golden_star.svg",
+    "mimeType": "image/svg+xml",
+    "fileSize": 4512,
+    "sizeFormatted": "4.41 KB",
+    "uploadedAt": "2026-10-04T21:50:00.000Z"
+  }
+}
+
+8.2 GET ALL STICKERS
+--------------------------------------------------------------------------------
+Endpoint:
+  GET /api/stickers or GET /api/stickers/:category
+
+Optional Query Parameters:
+  ?search=Star
+  ?category=Badges
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/stickers"
+
+8.3 GET STICKER CATEGORIES
+--------------------------------------------------------------------------------
+Endpoint:
+  GET /api/stickers/categories
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/stickers/categories"
+
+
 ================================================================================
 Generated for Aperture Server: https://aperture-server.onrender.com
 ================================================================================

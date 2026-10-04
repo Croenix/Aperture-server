@@ -87,7 +87,11 @@ router.post(
           title: req.body.title,
           mainCategory: req.body.mainCategory || req.body.main_category,
           subCategory: req.body.subCategory || req.body.sub_category || req.body.category,
-          category: req.body.subCategory || req.body.sub_category || req.body.category
+          category: req.body.subCategory || req.body.sub_category || req.body.category,
+          pricing: req.body.pricing,
+          isPremium: req.body.isPremium || req.body.is_premium,
+          format: req.body.format || req.body.stickerFormat,
+          stickerFormat: req.body.format || req.body.stickerFormat
         },
         req.apiKeyInfo,
         req

@@ -139,6 +139,14 @@
                       <svg class="icon tab-icon-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
                       <span>Text Preset</span>
                     </button>
+                    <button type="button" class="category-tab-btn" data-main-category="font" id="toggle-cat-font">
+                      <svg class="icon tab-icon-font" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"></path><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+                      <span>Font</span>
+                    </button>
+                    <button type="button" class="category-tab-btn" data-main-category="sticker" id="toggle-cat-sticker">
+                      <svg class="icon tab-icon-sticker" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="12 8 15 15 9 15"></polygon></svg>
+                      <span>Sticker</span>
+                    </button>
                   </div>
                   <input type="hidden" id="upload-main-category" value="image">
                 </div>
@@ -156,12 +164,40 @@
                     <input type="text" id="custom-subcategory-input" class="form-input hidden" placeholder="Type new subcategory name...">
                   </div>
                 </div>
+
+                <!-- Pricing / Access Type Option -->
+                <div class="form-group" id="pricing-option-group">
+                  <label for="upload-pricing-select" class="input-label">
+                    <span>Pricing / Access Type</span>
+                    <span class="label-hint">(Select Free or Paid / Premium)</span>
+                  </label>
+                  <select id="upload-pricing-select" class="form-select">
+                    <option value="Free">Free</option>
+                    <option value="Paid">Premium / Paid</option>
+                  </select>
+                </div>
+
+                <!-- Sticker Format Option (PNG vs SVG) -->
+                <div class="form-group hidden" id="sticker-format-option-group">
+                  <label for="upload-format-select" class="input-label">
+                    <span>Sticker Format</span>
+                    <span class="label-hint">(Select PNG or SVG format)</span>
+                  </label>
+                  <select id="upload-format-select" class="form-select">
+                    <option value="PNG">PNG</option>
+                    <option value="SVG">SVG</option>
+                  </select>
+                </div>
               </div>
 
               <div class="action-buttons">
                 <button type="button" id="start-upload-btn" class="btn btn-primary btn-lg btn-glow">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                   Upload Preset File
+                </button>
+                <button type="button" id="cancel-selected-btn" class="btn btn-secondary btn-lg">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  Cancel
                 </button>
               </div>
             </div>
@@ -351,6 +387,8 @@
                   <option value="all">All Types</option>
                   <option value="image">Image Presets</option>
                   <option value="text">Text Presets</option>
+                  <option value="font">Fonts</option>
+                  <option value="sticker">Stickers</option>
                 </select>
               </div>
 
@@ -432,6 +470,8 @@
             <select id="edit-file-main-category" class="form-select">
               <option value="image">Image Preset</option>
               <option value="text">Text Preset</option>
+              <option value="font">Font</option>
+              <option value="sticker">Sticker</option>
             </select>
           </div>
 
@@ -444,6 +484,24 @@
               </select>
               <input type="text" id="edit-file-subcategory-custom" class="form-input hidden" placeholder="Enter custom subcategory...">
             </div>
+          </div>
+
+          <!-- Edit Pricing / Premium Option -->
+          <div class="form-group">
+            <label for="edit-file-pricing-select" class="input-label">Pricing / Access Type</label>
+            <select id="edit-file-pricing-select" class="form-select">
+              <option value="Free">Free</option>
+              <option value="Paid">Premium / Paid</option>
+            </select>
+          </div>
+
+          <!-- Edit Sticker Format Option (PNG vs SVG) -->
+          <div class="form-group hidden" id="edit-file-format-group">
+            <label for="edit-file-format-select" class="input-label">Sticker Format</label>
+            <select id="edit-file-format-select" class="form-select">
+              <option value="PNG">PNG</option>
+              <option value="SVG">SVG</option>
+            </select>
           </div>
         </div>
         <div class="modal-footer">
@@ -554,7 +612,47 @@ curl -X GET http://localhost:3000/api/presets/text/Quotes</code>
           </div>
 
           <div class="docs-section">
-            <h4>6. Download / Direct File Access</h4>
+            <h4>6. Font API - Upload Font</h4>
+            <div class="code-block">
+              <code>curl -X POST http://localhost:3000/api/fonts \
+  -H "Authorization: Bearer aperture_upl_secret_key_2026" \
+  -F "file=@/path/to/font.ttf" \
+  -F "name=Roboto Bold" \
+  -F "subCategory=Free"</code>
+            </div>
+          </div>
+
+          <div class="docs-section">
+            <h4>7. Font API - Get Fonts</h4>
+            <div class="code-block">
+              <code>curl -X GET http://localhost:3000/api/fonts
+# Filter by Free fonts:
+curl -X GET http://localhost:3000/api/fonts/Free</code>
+            </div>
+          </div>
+
+          <div class="docs-section">
+            <h4>8. Sticker API - Upload Sticker</h4>
+            <div class="code-block">
+              <code>curl -X POST http://localhost:3000/api/stickers \
+  -H "Authorization: Bearer aperture_upl_secret_key_2026" \
+  -F "file=@/path/to/sticker.svg" \
+  -F "name=Golden Star Badge" \
+  -F "category=Badges"</code>
+            </div>
+          </div>
+
+          <div class="docs-section">
+            <h4>9. Sticker API - Get Stickers</h4>
+            <div class="code-block">
+              <code>curl -X GET http://localhost:3000/api/stickers
+# Filter by category:
+curl -X GET http://localhost:3000/api/stickers/Badges</code>
+            </div>
+          </div>
+
+          <div class="docs-section">
+            <h4>10. Download / Direct File Access</h4>
             <div class="code-block">
               <code>curl -O -J http://localhost:3000/files/f_8a72c91e4f2b/download</code>
             </div>

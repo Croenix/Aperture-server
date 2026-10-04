@@ -62,6 +62,12 @@ function initSchema() {
     if (!columnNames.includes('sub_category')) {
       db.exec("ALTER TABLE files ADD COLUMN sub_category TEXT NOT NULL DEFAULT 'general';");
     }
+    if (!columnNames.includes('is_premium')) {
+      db.exec("ALTER TABLE files ADD COLUMN is_premium INTEGER NOT NULL DEFAULT 0;");
+    }
+    if (!columnNames.includes('format')) {
+      db.exec("ALTER TABLE files ADD COLUMN format TEXT;");
+    }
   } catch (err) {
     // Ignore migration error
   }
@@ -72,6 +78,8 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_files_main_cat ON files (main_category);
     CREATE INDEX IF NOT EXISTS idx_files_sub_cat ON files (sub_category);
     CREATE INDEX IF NOT EXISTS idx_files_category ON files (category);
+    CREATE INDEX IF NOT EXISTS idx_files_is_premium ON files (is_premium);
+    CREATE INDEX IF NOT EXISTS idx_files_format ON files (format);
     CREATE INDEX IF NOT EXISTS idx_files_is_deleted ON files (is_deleted);
     CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys (is_active);
   `);
@@ -126,18 +134,25 @@ const dbOperations = {
   createFile(fileRecord) {
     const stmt = db.prepare(`
       INSERT INTO files (
-        id, original_name, filename, title, main_category, sub_category, category, mime_type, size,
-        storage_provider, storage_path, storage_metadata,
+        id, original_name, filename, title, main_category, sub_category, category, format, mime_type, size,
+        storage_provider, storage_path, storage_metadata, is_premium,
         uploaded_at, created_by, is_deleted
       ) VALUES (
-        @id, @originalName, @filename, @title, @mainCategory, @subCategory, @category, @mimeType, @size,
-        @storageProvider, @storagePath, @storageMetadata,
+        @id, @originalName, @filename, @title, @mainCategory, @subCategory, @category, @format, @mimeType, @size,
+        @storageProvider, @storagePath, @storageMetadata, @isPremium,
         @uploadedAt, @createdBy, 0
       )
     `);
 
     const mainCategory = (fileRecord.mainCategory || fileRecord.main_category || 'image').trim().toLowerCase();
     const subCategory = (fileRecord.subCategory || fileRecord.sub_category || fileRecord.category || 'general').trim();
+
+    let formatVal = fileRecord.format || fileRecord.stickerFormat || null;
+    if (formatVal && typeof formatVal === 'string') {
+      formatVal = formatVal.trim().toUpperCase();
+    }
+
+    const isPrem = (fileRecord.isPremium || fileRecord.is_premium || fileRecord.pricing === 'Paid' || fileRecord.pricing === 'paid') ? 1 : 0;
 
     stmt.run({
       id: fileRecord.id,
@@ -147,11 +162,13 @@ const dbOperations = {
       mainCategory,
       subCategory,
       category: subCategory,
+      format: formatVal,
       mimeType: fileRecord.mimeType,
       size: fileRecord.size,
       storageProvider: fileRecord.storageProvider || 'local',
       storagePath: fileRecord.storagePath,
       storageMetadata: fileRecord.storageMetadata ? JSON.stringify(fileRecord.storageMetadata) : null,
+      isPremium: isPrem,
       uploadedAt: fileRecord.uploadedAt || new Date().toISOString(),
       createdBy: fileRecord.createdBy || null
     });
@@ -167,7 +184,7 @@ const dbOperations = {
     return this._mapFileRow(row);
   },
 
-  listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '' } = {}) {
+  listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '', isPremium, pricing } = {}) {
     const offset = Math.max(0, (page - 1) * limit);
     let countSql = 'SELECT COUNT(*) as total FROM files WHERE is_deleted = 0';
     let querySql = 'SELECT * FROM files WHERE is_deleted = 0';
@@ -190,6 +207,16 @@ const dbOperations = {
       querySql += ' AND (LOWER(sub_category) = LOWER(?) OR LOWER(category) = LOWER(?))';
       countParams.push(activeSub, activeSub);
       params.push(activeSub, activeSub);
+    }
+
+    // Filter by premium / pricing
+    const targetPremium = isPremium !== undefined ? isPremium : (pricing !== undefined ? (pricing === 'Paid' || pricing === 'paid' || pricing === 'true' || pricing === '1') : undefined);
+    if (targetPremium !== undefined && targetPremium !== null && targetPremium !== 'all') {
+      const premVal = (targetPremium === true || targetPremium === 'true' || targetPremium === 1 || targetPremium === '1') ? 1 : 0;
+      countSql += ' AND is_premium = ?';
+      querySql += ' AND is_premium = ?';
+      countParams.push(premVal);
+      params.push(premVal);
     }
 
     // Global Search across title, names, categories, and IDs
@@ -231,7 +258,9 @@ const dbOperations = {
     // Build hierarchy dictionary
     const hierarchy = {
       image: [],
-      text: []
+      text: [],
+      font: [],
+      sticker: []
     };
 
     rows.forEach(r => {
@@ -273,6 +302,20 @@ const dbOperations = {
       params.push(newSub.trim());
     }
 
+    if (updates.isPremium !== undefined || updates.pricing !== undefined) {
+      const premVal = (updates.isPremium === true || updates.isPremium === 'true' || updates.pricing === 'Paid' || updates.pricing === 'paid') ? 1 : 0;
+      fields.push('is_premium = ?');
+      params.push(premVal);
+    }
+
+    if (updates.format !== undefined || updates.stickerFormat !== undefined) {
+      const fmtVal = (updates.format || updates.stickerFormat || '').trim().toUpperCase();
+      if (fmtVal) {
+        fields.push('format = ?');
+        params.push(fmtVal);
+      }
+    }
+
     if (fields.length === 0) {
       return this.getFileById(id);
     }
@@ -301,6 +344,7 @@ const dbOperations = {
   _mapFileRow(row) {
     const mainCategory = row.main_category || 'image';
     const subCategory = row.sub_category || row.category || 'general';
+    const isPremium = Boolean(row.is_premium);
     return {
       id: row.id,
       originalName: row.original_name,
@@ -309,6 +353,9 @@ const dbOperations = {
       mainCategory,
       subCategory,
       category: subCategory, // fallback compatibility
+      isPremium,
+      premium: isPremium ? 'Yes' : 'No',
+      pricing: isPremium ? 'Paid' : 'Free',
       mimeType: row.mime_type,
       size: row.size,
       storageProvider: row.storage_provider,
