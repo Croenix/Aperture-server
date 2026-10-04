@@ -21,6 +21,9 @@
   // Application State
   const state = {
     currentFile: null,
+    selectedFiles: [],
+    uploadIndex: 0,
+    uploadedBatchResults: [],
     activeXhr: null,
     uploadStartTime: null,
     apiKey: sessionStorage.getItem('aperture_api_key') || 'aperture_upl_secret_key_2026',
@@ -247,11 +250,9 @@
     switch (stateName) {
       case 'ready':
         elements.stateReady.classList.remove('hidden');
-        if (state.currentFile) {
+        if (state.selectedFiles && state.selectedFiles.length > 0) {
           if (elements.dropZone) elements.dropZone.classList.add('hidden');
           elements.selectedPanel.classList.remove('hidden');
-          elements.selectedFileName.textContent = state.currentFile.name;
-          elements.selectedFileSize.textContent = formatBytes(state.currentFile.size);
         } else {
           if (elements.dropZone) elements.dropZone.classList.remove('hidden');
           elements.selectedPanel.classList.add('hidden');
@@ -260,11 +261,8 @@
 
       case 'uploading':
         elements.stateUploading.classList.remove('hidden');
-        const activeTitle = elements.customTitleInput.value.trim() || (state.currentFile ? state.currentFile.name : 'Uploading...');
-        elements.uploadingFileName.textContent = activeTitle;
         elements.uploadPercentage.textContent = '0%';
         elements.progressBar.style.width = '0%';
-        elements.uploadBytes.textContent = `0 KB / ${state.currentFile ? formatBytes(state.currentFile.size) : '0 KB'}`;
         elements.uploadSpeed.textContent = 'Connecting...';
         break;
 
@@ -400,41 +398,105 @@
     fetchFilesList();
   }
 
-  // Handle File Selection
-  function handleFileSelected(file) {
-    if (!file) return;
-    state.currentFile = file;
+  // Helper to clean font title (converting arrows, dashes, underscores, dots to spaces)
+  function cleanFontTitle(filename) {
+    if (!filename || typeof filename !== 'string') return 'Unnamed Font';
+    let text = filename.trim();
 
-    const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-    const cleanTitle = baseName.replace(/[-_]+/g, ' ').trim();
-    elements.customTitleInput.value = cleanTitle;
-
-    const ext = file.name.split('.').pop().toLowerCase();
-    const isFontFile = ['ttf', 'otf', 'woff', 'woff2', 'eot'].includes(ext);
-    const isStickerFile = ['svg', 'png'].includes(ext);
-    const isTextFile = ['txt', 'json', 'md', 'xml', 'csv', 'yaml', 'yml', 'js', 'html', 'css'].includes(ext);
-
-    if (elements.uploadFormatSelect) {
-      elements.uploadFormatSelect.value = ext === 'svg' ? 'SVG' : 'PNG';
+    const match = text.match(/\.([a-zA-Z0-9]{2,8})$/);
+    if (match) {
+      const extName = match[1].toLowerCase();
+      if (!/^\d+$/.test(extName)) {
+        text = text.slice(0, text.length - match[0].length);
+      }
     }
 
-    if (isFontFile) {
+    return text
+      .replace(/(?:-->|->|=>|→|➔|➜|➡|>|[\u2190-\u21FF\u2794-\u27BE])/g, ' ')
+      .replace(/[-_.]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() || 'Unnamed Font';
+  }
+
+  // Handle File Selection (Supports single and multiple bulk selection)
+  function handleFilesSelected(files) {
+    if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    state.selectedFiles = fileArray;
+    state.currentFile = fileArray[0];
+
+    const firstExt = fileArray[0].name.split('.').pop().toLowerCase();
+    const isFont = fileArray.some(f => ['ttf', 'otf', 'woff', 'woff2', 'eot'].includes(f.name.split('.').pop().toLowerCase()));
+    const isSticker = ['svg', 'png'].includes(firstExt);
+    const isText = ['txt', 'json', 'md', 'xml', 'csv', 'yaml', 'yml', 'js', 'html', 'css'].includes(firstExt);
+
+    if (elements.uploadFormatSelect) {
+      elements.uploadFormatSelect.value = firstExt === 'svg' ? 'SVG' : 'PNG';
+    }
+
+    if (isFont) {
       setUploadMainCategory('font');
-    } else if (isStickerFile) {
+    } else if (isSticker) {
       setUploadMainCategory('sticker');
-    } else if (isTextFile) {
+    } else if (isText) {
       setUploadMainCategory('text');
     } else {
       setUploadMainCategory('image');
     }
 
+    const singleFileSummary = document.getElementById('single-file-summary');
+    const bulkFilesContainer = document.getElementById('bulk-files-container');
+    const bulkFilesCount = document.getElementById('bulk-files-count');
+    const bulkFilesList = document.getElementById('bulk-files-list');
+
+    if (fileArray.length === 1) {
+      const singleFile = fileArray[0];
+      if (singleFileSummary) singleFileSummary.classList.remove('hidden');
+      if (bulkFilesContainer) bulkFilesContainer.classList.add('hidden');
+
+      if (elements.selectedFileName) elements.selectedFileName.textContent = singleFile.name;
+      if (elements.selectedFileSize) elements.selectedFileSize.textContent = formatBytes(singleFile.size);
+      if (elements.customTitleInput) {
+        elements.customTitleInput.disabled = false;
+        elements.customTitleInput.value = cleanFontTitle(singleFile.name);
+      }
+    } else {
+      if (singleFileSummary) singleFileSummary.classList.add('hidden');
+      if (bulkFilesContainer) bulkFilesContainer.classList.remove('hidden');
+
+      if (bulkFilesCount) bulkFilesCount.textContent = `${fileArray.length} Files Selected (Bulk Upload)`;
+      if (bulkFilesList) {
+        bulkFilesList.innerHTML = fileArray.map((f, idx) => {
+          const titlePrev = cleanFontTitle(f.name);
+          return `
+            <div class="bulk-file-item">
+              <div class="bulk-file-info">
+                <div class="bulk-file-name" title="${escapeHtml(f.name)}">${idx + 1}. ${escapeHtml(f.name)}</div>
+                <div class="bulk-file-meta">
+                  <span>${formatBytes(f.size)}</span>
+                  <span>•</span>
+                  <span class="bulk-file-title-preview" title="Title formatted for upload">Title: "${escapeHtml(titlePrev)}"</span>
+                </div>
+              </div>
+              <span class="badge badge-subtle">Queued</span>
+            </div>
+          `;
+        }).join('');
+      }
+
+      if (elements.customTitleInput) {
+        elements.customTitleInput.value = '';
+        elements.customTitleInput.placeholder = 'Bulk Mode: Titles auto-formatted from filenames (arrows & dashes converted to spaces)';
+      }
+    }
+
     switchState('ready');
   }
 
-  // Execute Upload via XHR
+  // Execute Upload via XHR - Sequentially One-By-One
   function executeUpload() {
-    if (!state.currentFile) {
-      showToast('Please select a file first.', 'error');
+    if (!state.selectedFiles || state.selectedFiles.length === 0) {
+      showToast('Please select at least one file to upload.', 'error');
       return;
     }
 
@@ -449,115 +511,171 @@
       }
     }
 
+    const totalFiles = state.selectedFiles.length;
+    state.uploadIndex = 0;
+    state.uploadedBatchResults = [];
+
     switchState('uploading');
-    state.uploadStartTime = Date.now();
 
-    const formData = new FormData();
-    formData.append('file', state.currentFile);
+    uploadNextFileInBatch();
 
-    const title = elements.customTitleInput.value.trim() || state.currentFile.name;
-    const pricingVal = elements.uploadPricingSelect ? elements.uploadPricingSelect.value : 'Free';
-    const formatVal = elements.uploadFormatSelect ? elements.uploadFormatSelect.value : 'PNG';
-
-    formData.append('title', title);
-    formData.append('mainCategory', mainCategory);
-    formData.append('subCategory', subCategory);
-    formData.append('category', subCategory);
-    formData.append('pricing', pricingVal);
-    formData.append('isPremium', pricingVal === 'Paid' ? 'true' : 'false');
-    formData.append('format', formatVal);
-    formData.append('stickerFormat', formatVal);
-
-    const xhr = new XMLHttpRequest();
-    state.activeXhr = xhr;
-
-    xhr.upload.addEventListener('progress', (e) => {
-      if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 100);
-        elements.progressBar.style.width = `${percent}%`;
-        elements.uploadPercentage.textContent = `${percent}%`;
-        elements.uploadBytes.textContent = `${formatBytes(e.loaded)} / ${formatBytes(e.total)}`;
-
-        const elapsedSec = (Date.now() - state.uploadStartTime) / 1000;
-        if (elapsedSec > 0.3) {
-          const bytesPerSec = e.loaded / elapsedSec;
-          elements.uploadSpeed.textContent = `${formatBytes(bytesPerSec)}/s`;
-        }
+    function uploadNextFileInBatch() {
+      if (state.uploadIndex >= totalFiles) {
+        finishBatchUpload();
+        return;
       }
-    });
 
-    xhr.addEventListener('load', () => {
-      state.activeXhr = null;
-      let response = null;
+      const currentFile = state.selectedFiles[state.uploadIndex];
+      state.uploadStartTime = Date.now();
 
-      try {
-        response = JSON.parse(xhr.responseText);
-      } catch (err) {
-        response = {
-          success: false,
-          error: {
-            code: 'SERVER_ERROR',
-            message: `Server returned status ${xhr.status} with non-JSON response.`
+      const fileTitle = (totalFiles === 1 && elements.customTitleInput && elements.customTitleInput.value.trim())
+        ? elements.customTitleInput.value.trim()
+        : cleanFontTitle(currentFile.name);
+
+      elements.uploadingFileName.textContent = totalFiles > 1
+        ? `[File ${state.uploadIndex + 1}/${totalFiles}] ${fileTitle} (${currentFile.name})`
+        : fileTitle;
+
+      const pricingVal = elements.uploadPricingSelect ? elements.uploadPricingSelect.value : 'Free';
+      const formatVal = elements.uploadFormatSelect ? elements.uploadFormatSelect.value : 'PNG';
+
+      const formData = new FormData();
+      formData.append('file', currentFile);
+      formData.append('title', fileTitle);
+      formData.append('mainCategory', mainCategory);
+      formData.append('subCategory', subCategory);
+      formData.append('category', subCategory);
+      formData.append('pricing', pricingVal);
+      formData.append('isPremium', pricingVal === 'Paid' ? 'true' : 'false');
+      formData.append('format', formatVal);
+      formData.append('stickerFormat', formatVal);
+
+      const xhr = new XMLHttpRequest();
+      state.activeXhr = xhr;
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const filePercent = e.loaded / e.total;
+          const overallPercent = Math.round(((state.uploadIndex + filePercent) / totalFiles) * 100);
+
+          elements.progressBar.style.width = `${overallPercent}%`;
+          elements.uploadPercentage.textContent = `${overallPercent}%`;
+          elements.uploadBytes.textContent = totalFiles > 1
+            ? `File ${state.uploadIndex + 1}/${totalFiles}: ${formatBytes(e.loaded)} / ${formatBytes(e.total)}`
+            : `${formatBytes(e.loaded)} / ${formatBytes(e.total)}`;
+
+          const elapsedSec = (Date.now() - state.uploadStartTime) / 1000;
+          if (elapsedSec > 0.3) {
+            const bytesPerSec = e.loaded / elapsedSec;
+            elements.uploadSpeed.textContent = `${formatBytes(bytesPerSec)}/s`;
           }
-        };
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        state.activeXhr = null;
+        let response = null;
+
+        try {
+          response = JSON.parse(xhr.responseText);
+        } catch (err) {
+          response = {
+            success: false,
+            error: { code: 'SERVER_ERROR', message: `HTTP ${xhr.status}` }
+          };
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300 && response && response.success) {
+          const fileObj = response.file || response.font || response.sticker;
+          state.uploadedBatchResults.push({ success: true, file: fileObj });
+        } else {
+          const errorMsg = response && response.error ? response.error.message : 'Upload failed';
+          state.uploadedBatchResults.push({ success: false, filename: currentFile.name, error: errorMsg });
+        }
+
+        // Move to NEXT file in sequence
+        state.uploadIndex++;
+        uploadNextFileInBatch();
+      });
+
+      xhr.addEventListener('error', () => {
+        state.activeXhr = null;
+        state.uploadedBatchResults.push({ success: false, filename: currentFile.name, error: 'Network Connection Failed' });
+        state.uploadIndex++;
+        uploadNextFileInBatch();
+      });
+
+      xhr.addEventListener('abort', () => {
+        state.activeXhr = null;
+        showToast('Upload cancelled by user.', 'info');
+        switchState('ready');
+      });
+
+      xhr.open('POST', '/api/v1/files');
+      if (state.apiKey) {
+        xhr.setRequestHeader('Authorization', `Bearer ${state.apiKey.trim()}`);
       }
-
-      if (xhr.status >= 200 && xhr.status < 300 && response && response.success) {
-        const file = response.file || response.font || response.sticker;
-        const mainCat = (file.mainCategory || 'image').toLowerCase();
-
-        let badgeHtml = '<span class="badge badge-main-image">Image Preset</span>';
-        if (mainCat === 'text') badgeHtml = '<span class="badge badge-main-text">Text Preset</span>';
-        else if (mainCat === 'font') badgeHtml = '<span class="badge badge-main-font">Font</span>';
-        else if (mainCat === 'sticker') badgeHtml = '<span class="badge badge-main-sticker">Sticker</span>';
-
-        elements.successTitle.textContent = file.title || file.name || file.originalName;
-        elements.successMainCategory.innerHTML = badgeHtml;
-        elements.successSubCategory.innerHTML = `<span class="badge badge-subcategory">${escapeHtml(file.subCategory || file.category || 'General')}</span>`;
-        elements.successFilename.textContent = file.originalName || file.fileName;
-        elements.successFilesize.textContent = formatBytes(file.size || file.fileSize);
-        elements.successFileid.textContent = file.id;
-        elements.successMimetype.textContent = file.mimeType || '-';
-        elements.successTimestamp.textContent = formatTimestamp(file.uploadedAt);
-        elements.successFileUrl.value = file.fileUrl || file.fontUrl || file.stickerUrl || file.url;
-        elements.successApiUrl.value = file.apiUrl || file.fileUrl || file.url;
-
-        elements.successViewLink.href = file.viewUrl || `${file.fileUrl || file.url}/view`;
-        elements.successDownloadLink.href = file.downloadUrl || `${file.fileUrl || file.url}/download`;
-
-        switchState('success');
-        showToast('File uploaded successfully to Vault!', 'success');
-        fetchCategories();
-        fetchFilesList();
-      } else {
-        const errorCode = response && response.error ? response.error.code : `HTTP_${xhr.status}`;
-        const errorMsg = response && response.error ? response.error.message : 'An error occurred during upload.';
-        
-        elements.errorCodeBadge.textContent = errorCode;
-        elements.errorMessageText.textContent = errorMsg;
-        switchState('failure');
-        showToast(errorMsg, 'error');
-      }
-    });
-
-    xhr.addEventListener('error', () => {
-      state.activeXhr = null;
-      elements.errorCodeBadge.textContent = 'NETWORK_ERROR';
-      elements.errorMessageText.textContent = 'Network connection failed while transferring data.';
-      switchState('failure');
-    });
-
-    xhr.addEventListener('abort', () => {
-      state.activeXhr = null;
-      showToast('Upload cancelled.', 'info');
-      switchState('ready');
-    });
-
-    xhr.open('POST', '/api/v1/files');
-    if (state.apiKey) {
-      xhr.setRequestHeader('Authorization', `Bearer ${state.apiKey.trim()}`);
+      xhr.send(formData);
     }
-    xhr.send(formData);
+  }
+
+  function finishBatchUpload() {
+    const successes = state.uploadedBatchResults.filter(r => r.success);
+    const failures = state.uploadedBatchResults.filter(r => !r.success);
+
+    if (successes.length === 0 && failures.length > 0) {
+      elements.errorCodeBadge.textContent = 'UPLOAD_FAILED';
+      elements.errorMessageText.textContent = failures[0].error || 'Batch upload failed.';
+      switchState('failure');
+      showToast('Upload failed for all selected files.', 'error');
+      return;
+    }
+
+    switchState('success');
+
+    const firstFile = successes[0].file;
+    const mainCat = (firstFile.mainCategory || 'image').toLowerCase();
+    let badgeHtml = '<span class="badge badge-main-image">Image Preset</span>';
+    if (mainCat === 'text') badgeHtml = '<span class="badge badge-main-text">Text Preset</span>';
+    else if (mainCat === 'font') badgeHtml = '<span class="badge badge-main-font">Font</span>';
+    else if (mainCat === 'sticker') badgeHtml = '<span class="badge badge-main-sticker">Sticker</span>';
+
+    if (successes.length === 1) {
+      elements.successTitle.textContent = firstFile.title || firstFile.name || firstFile.originalName;
+      elements.successMainCategory.innerHTML = badgeHtml;
+      elements.successSubCategory.innerHTML = `<span class="badge badge-subcategory">${escapeHtml(firstFile.subCategory || firstFile.category || 'General')}</span>`;
+      elements.successFilename.textContent = firstFile.originalName || firstFile.fileName;
+      elements.successFilesize.textContent = formatBytes(firstFile.size || firstFile.fileSize);
+      elements.successFileid.textContent = firstFile.id;
+      elements.successMimetype.textContent = firstFile.mimeType || '-';
+      elements.successTimestamp.textContent = formatTimestamp(firstFile.uploadedAt);
+      elements.successFileUrl.value = firstFile.fileUrl || firstFile.fontUrl || firstFile.stickerUrl || firstFile.url;
+      elements.successApiUrl.value = firstFile.apiUrl || firstFile.fileUrl || firstFile.url;
+
+      elements.successViewLink.href = firstFile.viewUrl || `${firstFile.fileUrl || firstFile.url}/view`;
+      elements.successDownloadLink.href = firstFile.downloadUrl || `${firstFile.fileUrl || firstFile.url}/download`;
+      showToast('File uploaded successfully to Vault!', 'success');
+    } else {
+      elements.successTitle.textContent = `${successes.length} Files Uploaded Successfully`;
+      elements.successMainCategory.innerHTML = badgeHtml;
+      elements.successSubCategory.innerHTML = `<span class="badge badge-subcategory">${escapeHtml(firstFile.subCategory || 'General')}</span>`;
+      elements.successFilename.textContent = successes.map(s => s.file.originalName || s.file.fileName).join(', ');
+      const totalSize = successes.reduce((acc, s) => acc + (s.file.size || s.file.fileSize || 0), 0);
+      elements.successFilesize.textContent = `${formatBytes(totalSize)} total (${successes.length} files)`;
+      elements.successFileid.textContent = successes.map(s => s.file.id).join(', ');
+      elements.successMimetype.textContent = `${mainCat} multi-batch`;
+      elements.successTimestamp.textContent = formatTimestamp(firstFile.uploadedAt);
+      elements.successFileUrl.value = firstFile.fileUrl || firstFile.url;
+      elements.successApiUrl.value = window.location.origin + `/api/v1/files?mainCategory=${mainCat}`;
+
+      elements.successViewLink.href = firstFile.viewUrl || `${firstFile.fileUrl || firstFile.url}/view`;
+      elements.successDownloadLink.href = firstFile.downloadUrl || `${firstFile.fileUrl || firstFile.url}/download`;
+
+      showToast(`${successes.length} file(s) uploaded successfully!`, 'success');
+    }
+
+    fetchCategories();
+    fetchFilesList();
   }
 
   function cancelUpload() {
@@ -1185,7 +1303,7 @@
       const dt = e.dataTransfer;
       const files = dt.files;
       if (files && files.length > 0) {
-        handleFileSelected(files[0]);
+        handleFilesSelected(files);
       }
     });
 
@@ -1205,7 +1323,7 @@
     // File Input Browse
     elements.fileInput.addEventListener('change', (e) => {
       if (e.target.files && e.target.files.length > 0) {
-        handleFileSelected(e.target.files[0]);
+        handleFilesSelected(e.target.files);
       }
     });
 
@@ -1222,8 +1340,13 @@
 
     const resetFileSelection = () => {
       state.currentFile = null;
+      state.selectedFiles = [];
       elements.fileInput.value = '';
-      if (elements.customTitleInput) elements.customTitleInput.value = '';
+      if (elements.customTitleInput) {
+        elements.customTitleInput.value = '';
+        elements.customTitleInput.disabled = false;
+        elements.customTitleInput.placeholder = 'e.g. Vintage Amber Glow';
+      }
       if (elements.customSubcategoryInput) elements.customSubcategoryInput.value = '';
       switchState('ready');
     };
@@ -1273,9 +1396,7 @@
 
     // Success Actions
     elements.uploadAnotherBtn.addEventListener('click', () => {
-      state.currentFile = null;
-      elements.fileInput.value = '';
-      switchState('ready');
+      resetFileSelection();
     });
 
     // Failure Actions
@@ -1284,9 +1405,7 @@
     });
 
     elements.chooseAnotherBtn.addEventListener('click', () => {
-      state.currentFile = null;
-      elements.fileInput.value = '';
-      switchState('ready');
+      resetFileSelection();
     });
 
     // 1-Click Copy Buttons

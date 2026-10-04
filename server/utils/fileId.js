@@ -98,8 +98,12 @@ function formatTitle(rawTitle, originalName = '') {
     }
   }
 
-  // Replace '-' and '.' with space ' ', collapse multiple spaces, trim
-  return text.replace(/[-.]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Replace arrow marks (->, =>, -->, →, ➔, ➜, ➡, >, Unicode arrows), dashes (-, –, —), underscores (_), and dots (.) with space ' ', collapse multiple spaces, trim
+  return text
+    .replace(/(?:-->|->|=>|→|➔|➜|➡|>|[\u2190-\u21FF\u2794-\u27BE])/g, ' ')
+    .replace(/[-_.]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 module.exports = {

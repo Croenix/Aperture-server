@@ -2003,3 +2003,70 @@ body {
   from { opacity: 0; transform: translateY(20px) scale(0.9); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* Bulk Upload Files Container */
+.bulk-files-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: rgba(10, 16, 29, 0.6);
+  border: 1px solid var(--border-glass);
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: 1rem;
+}
+
+.bulk-files-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bulk-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 0.3rem;
+}
+
+.bulk-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.85rem;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  gap: 0.75rem;
+}
+
+.bulk-file-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bulk-file-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bulk-file-meta {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bulk-file-title-preview {
+  color: var(--color-cyan-light);
+  font-weight: 500;
+}
+

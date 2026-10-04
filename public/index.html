@@ -185,7 +185,7 @@
           <!-- ================= STATE 1: READY ================= -->
           <div class="state-view state-ready" id="state-ready">
             <div class="drop-zone" id="drop-zone">
-              <input type="file" id="file-input" class="file-input-hidden" aria-label="Select file">
+              <input type="file" id="file-input" class="file-input-hidden" multiple aria-label="Select file(s)">
               
               <div class="drop-zone-icon-pulse">
                 <div class="drop-zone-icon">
@@ -198,18 +198,18 @@
               </div>
 
               <div class="drop-zone-content">
-                <h3 class="state-title">Drag & Drop file to upload</h3>
-                <p class="drop-zone-subtitle">or <button type="button" id="browse-btn" class="btn-link">browse from computer</button></p>
+                <h3 class="state-title">Drag & Drop file(s) to upload</h3>
+                <p class="drop-zone-subtitle">or <button type="button" id="browse-btn" class="btn-link">browse from computer (bulk select supported)</button></p>
               </div>
 
               <div class="drop-zone-footer">
                 <span class="meta-tag">
                   <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                  Max 100 MB
+                  Max 100 MB per file
                 </span>
                 <span class="meta-tag">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-                  MongoDB Atlas Metadata
+                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"></path><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+                  Multi-Font Bulk Upload
                 </span>
                 <span class="meta-tag">
                   <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
@@ -220,7 +220,7 @@
 
             <!-- Selected File Preview -->
             <div class="selected-file-panel hidden" id="selected-file-panel">
-              <div class="file-summary-card">
+              <div class="file-summary-card" id="single-file-summary">
                 <div class="file-type-icon" id="selected-file-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
                 </div>
@@ -228,12 +228,21 @@
                   <div class="file-name" id="selected-file-name">example-preset.dng</div>
                   <div class="file-size-badge">
                     <span id="selected-file-size">4.2 MB</span>
-                    <span class="badge badge-subtle">Ready to process</span>
+                    <span class="badge badge-subtle" id="selected-file-badge">Ready to process</span>
                   </div>
                 </div>
-                <button type="button" class="btn-icon" id="clear-selected-btn" title="Remove file">
+                <button type="button" class="btn-icon" id="clear-selected-btn" title="Remove selection">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
+              </div>
+
+              <!-- Multi-file preview list -->
+              <div class="bulk-files-container hidden" id="bulk-files-container">
+                <div class="bulk-files-header">
+                  <span class="badge badge-counter" id="bulk-files-count">0 Files Selected</span>
+                  <span class="text-secondary" style="font-size:0.8rem;">Sequential Upload Ready</span>
+                </div>
+                <div class="bulk-files-list" id="bulk-files-list"></div>
               </div>
 
               <!-- Metadata form -->
