@@ -98,10 +98,12 @@ function formatTitle(rawTitle, originalName = '') {
     }
   }
 
-  // Replace arrow marks (->, =>, -->, →, ➔, ➜, ➡, >, Unicode arrows), dashes (-, –, —), underscores (_), and dots (.) with space ' ', collapse multiple spaces, trim
+  // Replace arrow marks, dashes, underscores, dots, and split CamelCase/PascalCase words (e.g. MapName -> Map Name)
   return text
     .replace(/(?:-->|->|=>|→|➔|➜|➡|>|[\u2190-\u21FF\u2794-\u27BE])/g, ' ')
     .replace(/[-_.]/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
     .replace(/\s+/g, ' ')
     .trim();
 }
