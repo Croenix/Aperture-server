@@ -1,67 +1,127 @@
 const fs = require('fs');
 const path = require('path');
+const cloudinary = require('cloudinary').v2;
 const config = require('../config');
 
 /**
  * Base Abstract Storage Provider Interface.
- * All custom storage adapters (e.g. S3, Cloudflare R2, Google Cloud Storage, Azure Blob)
- * must implement this contract.
  */
 class StorageProvider {
-  /**
-   * Saves an uploaded file to storage.
-   * @param {Object} params
-   * @param {string} params.fileId - Safe unique file ID (e.g. f_8a72c91e4f2b)
-   * @param {string} params.tempFilePath - Path to temporary file on disk (from multer)
-   * @param {string} params.originalName - Sanitized original filename
-   * @param {string} params.mimeType - MIME type
-   * @returns {Promise<{ storageFilename: string, storagePath: string, storageMetadata: Object|null }>}
-   */
   async saveFile(params) {
     throw new Error('saveFile() must be implemented by storage provider');
   }
-
-  /**
-   * Returns a readable stream for streaming or downloading the file.
-   * @param {Object} fileRecord - Database file record
-   * @param {Object} [options] - Stream options (e.g. { start, end } for range requests)
-   * @returns {Promise<stream.Readable>}
-   */
   async getReadStream(fileRecord, options = {}) {
     throw new Error('getReadStream() must be implemented by storage provider');
   }
-
-  /**
-   * Deletes a file from physical storage.
-   * @param {Object} fileRecord - Database file record
-   * @returns {Promise<boolean>}
-   */
   async deleteFile(fileRecord) {
     throw new Error('deleteFile() must be implemented by storage provider');
   }
-
-  /**
-   * Checks if the physical file exists in storage.
-   * @param {Object} fileRecord - Database file record
-   * @returns {Promise<boolean>}
-   */
   async fileExists(fileRecord) {
     throw new Error('fileExists() must be implemented by storage provider');
   }
-
-  /**
-   * Returns stats/metadata about the physical file if available.
-   * @param {Object} fileRecord
-   * @returns {Promise<Object>}
-   */
   async getFileStats(fileRecord) {
     throw new Error('getFileStats() must be implemented by storage provider');
   }
 }
 
 /**
+ * Cloudinary Storage Provider.
+ * Stores all uploaded assets (images, fonts, stickers, presets) in Cloudinary
+ * inside the configured folder (e.g. 'Aperture Assets').
+ */
+class CloudinaryStorageProvider extends StorageProvider {
+  constructor(options = {}) {
+    super();
+    this.cloudName = options.cloudName || config.cloudinary.cloudName;
+    this.apiKey = options.apiKey || config.cloudinary.apiKey;
+    this.apiSecret = options.apiSecret || config.cloudinary.apiSecret;
+    this.folder = options.folder || config.cloudinary.folder || 'Aperture Assets';
+
+    if (this.cloudName && this.apiKey && this.apiSecret) {
+      cloudinary.config({
+        cloud_name: this.cloudName,
+        api_key: this.apiKey,
+        api_secret: this.apiSecret
+      });
+    }
+  }
+
+  async saveFile({ fileId, tempFilePath, originalName, mimeType }) {
+    if (!tempFilePath || !fs.existsSync(tempFilePath)) {
+      throw new Error('Source file not found for Cloudinary upload');
+    }
+
+    const folderName = this.folder || 'Aperture Assets';
+    const uploadOptions = {
+      folder: folderName,
+      public_id: fileId,
+      resource_type: 'auto',
+      use_filename: false,
+      unique_filename: false
+    };
+
+    let result;
+    try {
+      result = await cloudinary.uploader.upload(tempFilePath, uploadOptions);
+    } catch (err) {
+      // Fallback for custom binary/font extensions that require raw resource type
+      if (err && err.message && (err.message.includes('Invalid image file') || err.message.includes('file format'))) {
+        uploadOptions.resource_type = 'raw';
+        result = await cloudinary.uploader.upload(tempFilePath, uploadOptions);
+      } else {
+        throw err;
+      }
+    }
+
+    // Clean up local temp file after upload to Cloudinary
+    await fs.promises.unlink(tempFilePath).catch(() => {});
+
+    return {
+      storageFilename: result.public_id,
+      storagePath: result.public_id,
+      directUrl: result.secure_url || result.url,
+      size: result.bytes || 0,
+      storageMetadata: {
+        provider: 'cloudinary',
+        publicId: result.public_id,
+        secureUrl: result.secure_url || result.url,
+        format: result.format,
+        resourceType: result.resource_type,
+        folder: folderName
+      }
+    };
+  }
+
+  async deleteFile(fileRecord) {
+    try {
+      const publicId = fileRecord.storagePath || fileRecord.filename;
+      if (!publicId) return true;
+
+      try {
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+      } catch {
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+      }
+      return true;
+    } catch (err) {
+      return true;
+    }
+  }
+
+  async fileExists(fileRecord) {
+    return Boolean(fileRecord.directUrl || fileRecord.storagePath);
+  }
+
+  async getFileStats(fileRecord) {
+    return {
+      size: fileRecord.size,
+      url: fileRecord.directUrl || fileRecord.storagePath
+    };
+  }
+}
+
+/**
  * Local Filesystem Storage Provider.
- * Stores files securely in the configured UPLOAD_DIRECTORY outside public root.
  */
 class LocalStorageProvider extends StorageProvider {
   constructor(uploadDirectory = config.uploadDirectory) {
@@ -76,15 +136,9 @@ class LocalStorageProvider extends StorageProvider {
     }
   }
 
-  /**
-   * Safely resolves a stored filename within the upload directory,
-   * guaranteeing no path traversal outside uploadDirectory.
-   */
   _getSafeAbsolutePath(filename) {
     const safeBaseName = path.basename(filename);
     const resolvedPath = path.resolve(this.uploadDirectory, safeBaseName);
-    
-    // Strict directory containment check
     if (!resolvedPath.startsWith(this.uploadDirectory)) {
       throw new Error('Path traversal attempt detected');
     }
@@ -94,17 +148,14 @@ class LocalStorageProvider extends StorageProvider {
   async saveFile({ fileId, tempFilePath, originalName, mimeType }) {
     this._ensureDirectory();
 
-    // Preserve extension safely
     const ext = path.extname(originalName).toLowerCase();
     const storageFilename = `${fileId}${ext}`;
     const destinationPath = this._getSafeAbsolutePath(storageFilename);
 
-    // If file came from multer disk storage temp path, move it; otherwise write buffer
     if (tempFilePath && fs.existsSync(tempFilePath)) {
       try {
         await fs.promises.rename(tempFilePath, destinationPath);
       } catch (err) {
-        // Fallback for cross-device moves
         await fs.promises.copyFile(tempFilePath, destinationPath);
         await fs.promises.unlink(tempFilePath).catch(() => {});
       }
@@ -116,7 +167,7 @@ class LocalStorageProvider extends StorageProvider {
 
     return {
       storageFilename,
-      storagePath: storageFilename, // relative key for portability
+      storagePath: storageFilename,
       size: stat.size,
       storageMetadata: {
         provider: 'local',
@@ -165,49 +216,18 @@ class LocalStorageProvider extends StorageProvider {
 }
 
 /**
- * Cloud S3-Compatible Storage Provider (Skeleton / Ready for AWS S3 / MinIO / Cloudflare R2).
- * To activate, configure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, S3_BUCKET_NAME in .env.
+ * S3 Provider Skeleton
  */
 class S3StorageProvider extends StorageProvider {
   constructor(options = {}) {
     super();
-    this.bucket = options.bucket || process.env.S3_BUCKET_NAME;
-    this.region = options.region || process.env.AWS_REGION || 'us-east-1';
-    this.endpoint = options.endpoint || process.env.S3_ENDPOINT;
-    // S3Client initialization can be plugged here when @aws-sdk/client-s3 is added
-  }
-
-  async saveFile({ fileId, tempFilePath, originalName, mimeType }) {
-    const ext = path.extname(originalName).toLowerCase();
-    const key = `uploads/${fileId}${ext}`;
-    
-    // AWS S3 PutObjectCommand implementation pattern:
-    // const stream = fs.createReadStream(tempFilePath);
-    // await s3Client.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: stream, ContentType: mimeType }));
-    
-    throw new Error('S3StorageProvider is configured as modular architecture. Install @aws-sdk/client-s3 and configure S3 credentials to use.');
-  }
-
-  async getReadStream(fileRecord, options = {}) {
-    throw new Error('S3StorageProvider getReadStream not enabled.');
-  }
-
-  async deleteFile(fileRecord) {
-    throw new Error('S3StorageProvider deleteFile not enabled.');
-  }
-
-  async fileExists(fileRecord) {
-    throw new Error('S3StorageProvider fileExists not enabled.');
-  }
-
-  async getFileStats(fileRecord) {
-    throw new Error('S3StorageProvider getFileStats not enabled.');
   }
 }
 
 // Storage Provider Registry & Factory
 const providers = {
   local: new LocalStorageProvider(),
+  cloudinary: new CloudinaryStorageProvider(),
   s3: new S3StorageProvider()
 };
 
@@ -222,6 +242,7 @@ function getStorageProvider(name = config.storageProvider) {
 module.exports = {
   StorageProvider,
   LocalStorageProvider,
+  CloudinaryStorageProvider,
   S3StorageProvider,
   getStorageProvider
 };

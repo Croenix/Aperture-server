@@ -3,14 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aperture File Server - Secure Cloud & Local File Storage</title>
-  <meta name="description" content="Production-ready secure file upload system, REST API, and media streaming platform.">
+  <title>Aperture Cloud Vault - File & Preset Management System</title>
+  <meta name="description" content="Next-generation file upload system, REST API, preset repository, and media streaming platform with MongoDB Atlas & Cloudinary.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="app-background">
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
+    <div class="grid-overlay"></div>
+  </div>
+
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
@@ -27,60 +34,172 @@
           </svg>
         </div>
         <div class="brand-text">
-          <h1>APERTURE</h1>
-          <span class="badge badge-version">v1.0.0</span>
+          <div class="brand-title-row">
+            <h1>APERTURE</h1>
+            <span class="badge badge-version">v1.0.0</span>
+          </div>
+          <p class="brand-subtitle">Cloud Vault • MongoDB Atlas & Cloudinary</p>
         </div>
       </div>
 
       <div class="header-actions">
-        <!-- Auth status button -->
-        <button id="auth-config-btn" class="btn btn-glass" title="Configure API Key">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Security & API Keys Page button -->
+        <button id="auth-config-btn" class="btn btn-glass" title="Security & API Keys Security Page">
+          <svg class="icon text-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5M7 17l-4.5 4.5A2 2 0 0 0 2 23h4v-2h2v-2h2v-2h2v-2l-1.5-1.5M15 5l4 4"></path>
             <circle cx="15.5" cy="8.5" r="2.5"></circle>
           </svg>
-          <span id="active-key-name">Upload Key Active</span>
+          <span id="active-key-name">Security & API Keys</span>
         </button>
 
-        <!-- API Docs / Curl modal button -->
+        <!-- API Docs button -->
         <button id="docs-btn" class="btn btn-glass" title="API Quick Reference & cURL">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg class="icon text-indigo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="4 17 10 11 4 5"></polyline>
             <line x1="12" y1="19" x2="20" y2="19"></line>
           </svg>
           <span>API Docs</span>
         </button>
 
-        <!-- System status pill -->
-        <div class="status-pill" id="server-status-pill">
-          <span class="status-dot"></span>
-          <span class="status-text">Server Online</span>
+        <!-- Homepage Live Connection Status Indicators -->
+        <div class="status-group">
+          <!-- MongoDB Atlas Connection Status -->
+          <div class="status-pill status-pill-mongo" id="mongo-status-pill" title="MongoDB Atlas Database Status">
+            <span class="status-dot dot-emerald"></span>
+            <span class="status-text" id="mongo-status-text">MongoDB Connected</span>
+          </div>
+
+          <!-- Cloudinary Connection Status -->
+          <div class="status-pill status-pill-cloudinary" id="cloudinary-status-pill" title="Cloudinary Asset Storage Status">
+            <span class="status-dot dot-cyan"></span>
+            <span class="status-text" id="cloudinary-status-text">Cloudinary Active</span>
+          </div>
+
+          <!-- Server Online Status -->
+          <div class="status-pill status-pill-server" id="server-status-pill" title="API Server Status">
+            <span class="status-dot"></span>
+            <span class="status-text" id="server-status-text">API Online</span>
+          </div>
         </div>
       </div>
     </header>
 
-    <!-- Main Content Area -->
+    <!-- Metrics Stats Overview Bar -->
+    <section class="metrics-overview">
+      <div class="stat-card" id="stat-card-all">
+        <div class="stat-icon icon-cyan">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Total Vault Files</span>
+          <div class="stat-value-group">
+            <span class="stat-value" id="stat-total-count">0</span>
+            <span class="stat-badge">Presets</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-card" id="stat-card-image" data-filter="image">
+        <div class="stat-icon icon-image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Image Presets</span>
+          <div class="stat-value-group">
+            <span class="stat-value" id="stat-image-count">0</span>
+            <span class="stat-subtext">Filter</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-card" id="stat-card-text" data-filter="text">
+        <div class="stat-icon icon-text">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Text Presets</span>
+          <div class="stat-value-group">
+            <span class="stat-value" id="stat-text-count">0</span>
+            <span class="stat-subtext">Filter</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-card" id="stat-card-font" data-filter="font">
+        <div class="stat-icon icon-font">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"></path><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Fonts Vault</span>
+          <div class="stat-value-group">
+            <span class="stat-value" id="stat-font-count">0</span>
+            <span class="stat-subtext">Filter</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-card" id="stat-card-sticker" data-filter="sticker">
+        <div class="stat-icon icon-sticker">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="12 8 15 15 9 15"></polygon></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Stickers</span>
+          <div class="stat-value-group">
+            <span class="stat-value" id="stat-sticker-count">0</span>
+            <span class="stat-subtext">Filter</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-card" id="stat-card-storage">
+        <div class="stat-icon icon-storage">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M21 19c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14"></path><path d="M21 5v14"></path></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Vault Storage</span>
+          <div class="stat-value-group">
+            <span class="stat-value" id="stat-storage-total">0 MB</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Workspace Layout Grid -->
     <main class="main-layout">
-      <!-- Upload Card Section -->
+      
+      <!-- LEFT COLUMN: Upload Center Card Section -->
       <section class="upload-section">
         <div class="card upload-card" id="upload-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-header-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              </div>
+              <div>
+                <h2>Upload Preset & Assets</h2>
+                <p class="card-subtitle">Stored in Cloudinary under 'Aperture Assets' folder</p>
+              </div>
+            </div>
+          </div>
 
           <!-- ================= STATE 1: READY ================= -->
           <div class="state-view state-ready" id="state-ready">
             <div class="drop-zone" id="drop-zone">
               <input type="file" id="file-input" class="file-input-hidden" aria-label="Select file">
               
-              <div class="drop-zone-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
+              <div class="drop-zone-icon-pulse">
+                <div class="drop-zone-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                </div>
               </div>
 
               <div class="drop-zone-content">
-                <h3 class="state-title">Select a file to upload</h3>
-                <p class="drop-zone-subtitle">Drag and drop your file here, or <button type="button" id="browse-btn" class="btn-link">browse files</button></p>
+                <h3 class="state-title">Drag & Drop file to upload</h3>
+                <p class="drop-zone-subtitle">or <button type="button" id="browse-btn" class="btn-link">browse from computer</button></p>
               </div>
 
               <div class="drop-zone-footer">
@@ -90,54 +209,57 @@
                 </span>
                 <span class="meta-tag">
                   <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-                  REST API Enabled
+                  MongoDB Atlas Metadata
                 </span>
                 <span class="meta-tag">
                   <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-                  Encrypted Storage
+                  Cloudinary Vault
                 </span>
               </div>
             </div>
 
-            <!-- Selected File Preview in Ready State -->
+            <!-- Selected File Preview -->
             <div class="selected-file-panel hidden" id="selected-file-panel">
               <div class="file-summary-card">
                 <div class="file-type-icon" id="selected-file-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
                 </div>
                 <div class="file-summary-details">
-                  <div class="file-name" id="selected-file-name">example-document.apx</div>
-                  <div class="file-size" id="selected-file-size">4.2 MB</div>
+                  <div class="file-name" id="selected-file-name">example-preset.dng</div>
+                  <div class="file-size-badge">
+                    <span id="selected-file-size">4.2 MB</span>
+                    <span class="badge badge-subtle">Ready to process</span>
+                  </div>
                 </div>
                 <button type="button" class="btn-icon" id="clear-selected-btn" title="Remove file">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
               </div>
 
-              <!-- Metadata customization: Title, Main Category & Subcategory -->
+              <!-- Metadata form -->
               <div class="upload-meta-form">
                 <div class="form-group">
                   <label for="custom-title-input" class="input-label">
                     <span>Preset Title / Display Name</span>
-                    <span class="label-hint">(e.g. Vintage Amber Glow, Cinematic LUT)</span>
+                    <span class="label-hint">(e.g. Amber Glow, Cinematic LUT)</span>
                   </label>
-                  <input type="text" id="custom-title-input" class="form-input" placeholder="e.g. Vintage Film Glow">
+                  <input type="text" id="custom-title-input" class="form-input" placeholder="e.g. Vintage Amber Glow">
                 </div>
 
-                <!-- Main Category Switcher (Image Preset vs Text Preset) -->
+                <!-- Main Category Switcher Tabs -->
                 <div class="form-group">
                   <label class="input-label">
-                    <span>Main Category</span>
-                    <span class="label-hint">(Select preset type)</span>
+                    <span>Main Preset Type</span>
+                    <span class="label-hint">(Category classification)</span>
                   </label>
                   <div class="category-type-tabs" id="main-category-toggle-group">
                     <button type="button" class="category-tab-btn active" data-main-category="image" id="toggle-cat-image">
                       <svg class="icon tab-icon-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                      <span>Image Preset</span>
+                      <span>Image</span>
                     </button>
                     <button type="button" class="category-tab-btn" data-main-category="text" id="toggle-cat-text">
                       <svg class="icon tab-icon-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
-                      <span>Text Preset</span>
+                      <span>Text</span>
                     </button>
                     <button type="button" class="category-tab-btn" data-main-category="font" id="toggle-cat-font">
                       <svg class="icon tab-icon-font" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"></path><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
@@ -152,40 +274,42 @@
                 </div>
 
                 <!-- Sub Category Picker -->
-                <div class="form-group">
-                  <label for="custom-subcategory-select" class="input-label">
-                    <span>Sub Category</span>
-                    <span class="label-hint" id="subcategory-label-hint">(Select preset style or type a custom name)</span>
-                  </label>
-                  <div class="category-picker-row">
-                    <select id="custom-subcategory-select" class="form-select">
-                      <!-- Populated dynamically based on Main Category -->
-                    </select>
-                    <input type="text" id="custom-subcategory-input" class="form-input hidden" placeholder="Type new subcategory name...">
+                <div class="form-row-2col">
+                  <div class="form-group">
+                    <label for="custom-subcategory-select" class="input-label">
+                      <span>Sub Category</span>
+                      <span class="label-hint" id="subcategory-label-hint">(Select style)</span>
+                    </label>
+                    <div class="category-picker-row">
+                      <select id="custom-subcategory-select" class="form-select">
+                        <!-- Populated dynamically -->
+                      </select>
+                      <input type="text" id="custom-subcategory-input" class="form-input hidden" placeholder="Type new category name...">
+                    </div>
                   </div>
-                </div>
 
-                <!-- Pricing / Access Type Option -->
-                <div class="form-group" id="pricing-option-group">
-                  <label for="upload-pricing-select" class="input-label">
-                    <span>Pricing / Access Type</span>
-                    <span class="label-hint">(Select Free or Paid / Premium)</span>
-                  </label>
-                  <select id="upload-pricing-select" class="form-select">
-                    <option value="Free">Free</option>
-                    <option value="Paid">Premium / Paid</option>
-                  </select>
+                  <!-- Pricing Option -->
+                  <div class="form-group" id="pricing-option-group">
+                    <label for="upload-pricing-select" class="input-label">
+                      <span>Access Tier</span>
+                      <span class="label-hint">(Pricing)</span>
+                    </label>
+                    <select id="upload-pricing-select" class="form-select">
+                      <option value="Free">Free Access</option>
+                      <option value="Paid">Premium / Paid</option>
+                    </select>
+                  </div>
                 </div>
 
                 <!-- Sticker Format Option (PNG vs SVG) -->
                 <div class="form-group hidden" id="sticker-format-option-group">
                   <label for="upload-format-select" class="input-label">
-                    <span>Sticker Format</span>
-                    <span class="label-hint">(Select PNG or SVG format)</span>
+                    <span>Sticker Asset Format</span>
+                    <span class="label-hint">(Vector / Raster format)</span>
                   </label>
                   <select id="upload-format-select" class="form-select">
-                    <option value="PNG">PNG</option>
-                    <option value="SVG">SVG</option>
+                    <option value="PNG">PNG Raster</option>
+                    <option value="SVG">SVG Vector</option>
                   </select>
                 </div>
               </div>
@@ -193,11 +317,11 @@
               <div class="action-buttons">
                 <button type="button" id="start-upload-btn" class="btn btn-primary btn-lg btn-glow">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                  Upload Preset File
+                  <span>Upload to Cloudinary</span>
                 </button>
                 <button type="button" id="cancel-selected-btn" class="btn btn-secondary btn-lg">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  Cancel
+                  <span>Cancel</span>
                 </button>
               </div>
             </div>
@@ -206,30 +330,31 @@
 
           <!-- ================= STATE 2: UPLOADING ================= -->
           <div class="state-view state-uploading hidden" id="state-uploading">
-            <div class="uploading-header">
-              <div class="spinner-ring"></div>
-              <div>
-                <h3 class="state-title">Uploading...</h3>
-                <p class="state-subtitle" id="uploading-file-name">filename.ext</p>
+            <div class="uploading-card">
+              <div class="uploading-header">
+                <div class="spinner-ring"></div>
+                <div class="uploading-info">
+                  <h3 class="state-title">Streaming to Cloudinary & MongoDB Atlas...</h3>
+                  <p class="state-subtitle" id="uploading-file-name">filename.ext</p>
+                </div>
+                <div class="percentage-badge" id="upload-percentage">0%</div>
               </div>
-              <div class="percentage-badge" id="upload-percentage">0%</div>
-            </div>
 
-            <!-- Progress Bar -->
-            <div class="progress-track">
-              <div class="progress-bar" id="progress-bar" style="width: 0%;"></div>
-            </div>
+              <div class="progress-track">
+                <div class="progress-bar" id="progress-bar" style="width: 0%;"></div>
+              </div>
 
-            <div class="upload-stats">
-              <span id="upload-bytes">0 KB / 0 KB</span>
-              <span id="upload-speed">Streaming to Aperture...</span>
-            </div>
+              <div class="upload-stats">
+                <span id="upload-bytes">0 KB / 0 KB</span>
+                <span id="upload-speed" class="text-cyan">Connecting...</span>
+              </div>
 
-            <div class="upload-actions">
-              <button type="button" id="cancel-upload-btn" class="btn btn-danger-outline">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-                Cancel Upload
-              </button>
+              <div class="upload-actions">
+                <button type="button" id="cancel-upload-btn" class="btn btn-danger-outline">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                  Cancel Upload
+                </button>
+              </div>
             </div>
           </div>
 
@@ -241,12 +366,11 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
               </div>
               <div>
-                <h3 class="state-title text-success">Upload successful</h3>
-                <p class="state-subtitle">Your preset has been stored securely with custom title & category hierarchy.</p>
+                <h3 class="state-title text-success">Upload Complete</h3>
+                <p class="state-subtitle">Stored in Cloudinary 'Aperture Assets' folder & MongoDB Atlas.</p>
               </div>
             </div>
 
-            <!-- File Metadata Card -->
             <div class="info-grid">
               <div class="info-row">
                 <span class="info-label">Title</span>
@@ -261,7 +385,7 @@
                 <span class="info-value" id="success-sub-category"><span class="badge badge-subcategory">-</span></span>
               </div>
               <div class="info-row">
-                <span class="info-label">Original File Name</span>
+                <span class="info-label">File Name</span>
                 <span class="info-value" id="success-filename">-</span>
               </div>
               <div class="info-row">
@@ -282,32 +406,30 @@
               </div>
             </div>
 
-            <!-- URL Sections with Copy Buttons -->
+            <!-- URL Sections -->
             <div class="url-copy-section">
-              <!-- Public File URL -->
               <div class="url-group">
                 <label class="url-label">
-                  <span>Direct Preset File URL</span>
-                  <span class="badge badge-subtle">Direct Access / Stream</span>
+                  <span>Cloudinary Direct URL</span>
+                  <span class="badge badge-subtle">Cloudinary CDN Stream</span>
                 </label>
                 <div class="url-input-container">
                   <input type="text" id="success-file-url" class="input-readonly" readonly>
-                  <button type="button" class="btn btn-secondary copy-btn" data-target="success-file-url" title="Copy File URL">
+                  <button type="button" class="btn btn-secondary copy-btn" data-target="success-file-url" title="Copy Cloudinary URL">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                     <span>Copy</span>
                   </button>
                 </div>
               </div>
 
-              <!-- API URL -->
               <div class="url-group">
                 <label class="url-label">
-                  <span>REST API Endpoint</span>
-                  <span class="badge badge-subtle">Metadata Endpoint</span>
+                  <span>REST API Metadata Endpoint</span>
+                  <span class="badge badge-subtle">MongoDB Atlas API</span>
                 </label>
                 <div class="url-input-container">
                   <input type="text" id="success-api-url" class="input-readonly" readonly>
-                  <button type="button" class="btn btn-secondary copy-btn" data-target="success-api-url" title="Copy API URL">
+                  <button type="button" class="btn btn-secondary copy-btn" data-target="success-api-url" title="Copy API Endpoint URL">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                     <span>Copy</span>
                   </button>
@@ -315,7 +437,6 @@
               </div>
             </div>
 
-            <!-- Success Actions -->
             <div class="success-actions">
               <a id="success-view-link" href="#" target="_blank" class="btn btn-secondary">
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -340,12 +461,11 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
               </div>
               <div>
-                <h3 class="state-title text-danger">Upload failed</h3>
-                <p class="state-subtitle">The server could not process your upload request.</p>
+                <h3 class="state-title text-danger">Upload Failed</h3>
+                <p class="state-subtitle">The file server encountered an issue processing your request.</p>
               </div>
             </div>
 
-            <!-- Error Details Box -->
             <div class="error-detail-card">
               <div class="error-header">
                 <span class="error-code-badge" id="error-code-badge">ERROR_CODE</span>
@@ -355,7 +475,6 @@
               </div>
             </div>
 
-            <!-- Failure Actions -->
             <div class="failure-actions">
               <button type="button" id="retry-upload-btn" class="btn btn-primary">
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
@@ -371,45 +490,88 @@
         </div>
       </section>
 
-      <!-- File Manager / Explorer Section -->
+      <!-- RIGHT COLUMN: Presets Repository Explorer -->
       <section class="explorer-section">
         <div class="card explorer-card">
           <div class="explorer-header">
             <div class="explorer-title-wrap">
-              <h2>Presets & Files Repository</h2>
-              <span class="badge badge-counter" id="file-total-count">0 presets</span>
+              <div class="title-with-badge">
+                <h2>Presets & Files Repository</h2>
+                <span class="badge badge-counter" id="file-total-count">0 presets</span>
+              </div>
+              <p class="explorer-subtitle">Browse, search, edit metadata & stream asset endpoints</p>
             </div>
             
-            <div class="explorer-controls">
-              <!-- Main Category Filter -->
-              <div class="filter-wrap">
-                <select id="main-category-filter-select" class="form-select filter-select" aria-label="Filter by Preset Type">
-                  <option value="all">All Types</option>
-                  <option value="image">Image Presets</option>
-                  <option value="text">Text Presets</option>
-                  <option value="font">Fonts</option>
-                  <option value="sticker">Stickers</option>
-                </select>
-              </div>
-
-              <!-- Sub Category Filter -->
-              <div class="filter-wrap">
-                <select id="category-filter-select" class="form-select filter-select" aria-label="Filter by Subcategory">
-                  <option value="all">All Subcategories</option>
-                </select>
-              </div>
-
-              <div class="search-input-wrap">
-                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <input type="text" id="file-search-input" placeholder="Search title, subcategory, ID...">
-              </div>
-              <button id="refresh-files-btn" class="btn btn-glass" title="Refresh list">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <div class="view-mode-toggle">
+              <button type="button" id="view-grid-btn" class="view-toggle-btn active" title="Grid Cards View">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                <span>Grid</span>
+              </button>
+              <button type="button" id="view-table-btn" class="view-toggle-btn" title="Table Detail View">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                <span>Table</span>
               </button>
             </div>
           </div>
 
-          <div class="table-container">
+          <!-- Category Pill Filters -->
+          <div class="category-pills-bar">
+            <button type="button" class="category-pill active" id="pill-cat-all" data-category="all">
+              <span>All Presets</span>
+            </button>
+            <button type="button" class="category-pill" id="pill-cat-image" data-category="image">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              <span>Image Presets</span>
+            </button>
+            <button type="button" class="category-pill" id="pill-cat-text" data-category="text">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+              <span>Text Presets</span>
+            </button>
+            <button type="button" class="category-pill" id="pill-cat-font" data-category="font">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"></path><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+              <span>Fonts</span>
+            </button>
+            <button type="button" class="category-pill" id="pill-cat-sticker" data-category="sticker">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="12 8 15 15 9 15"></polygon></svg>
+              <span>Stickers</span>
+            </button>
+          </div>
+
+          <!-- Controls Bar -->
+          <div class="explorer-controls">
+            <select id="main-category-filter-select" class="form-select filter-select hidden" aria-label="Filter by Preset Type">
+              <option value="all">All Types</option>
+              <option value="image">Image Presets</option>
+              <option value="text">Text Presets</option>
+              <option value="font">Fonts</option>
+              <option value="sticker">Stickers</option>
+            </select>
+
+            <div class="filter-wrap">
+              <select id="category-filter-select" class="form-select filter-select" aria-label="Filter by Subcategory">
+                <option value="all">All Subcategories</option>
+              </select>
+            </div>
+
+            <div class="search-input-wrap">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="file-search-input" placeholder="Search preset title, ID, category...">
+            </div>
+
+            <button id="refresh-files-btn" class="btn btn-glass icon-only-btn" title="Refresh files list">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            </button>
+          </div>
+
+          <!-- GRID VIEW -->
+          <div class="files-grid-container" id="files-grid-container">
+            <div class="files-grid" id="files-grid-body">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- TABLE VIEW -->
+          <div class="table-container hidden" id="files-table-container">
             <table class="files-table" id="files-table">
               <thead>
                 <tr>
@@ -427,7 +589,7 @@
                   <td colspan="7" class="empty-placeholder">
                     <div class="empty-state">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
-                      <p>No presets loaded yet. Upload your first preset above!</p>
+                      <p>Loading presets repository...</p>
                     </div>
                   </td>
                 </tr>
@@ -447,11 +609,14 @@
       </section>
     </main>
 
-    <!-- Modal: Edit Preset / File -->
+    <!-- Modal: Edit Preset Details -->
     <div class="modal-backdrop hidden" id="edit-modal">
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3>Edit Preset Details</h3>
+          <div class="modal-title-group">
+            <svg class="icon text-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            <h3>Edit Preset Metadata</h3>
+          </div>
           <button class="modal-close-btn" id="close-edit-modal">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
@@ -464,7 +629,6 @@
             <input type="text" id="edit-file-title" class="form-input" placeholder="e.g. Cinematic Forest Glow">
           </div>
 
-          <!-- Edit Main Category -->
           <div class="form-group">
             <label for="edit-file-main-category" class="input-label">Main Category</label>
             <select id="edit-file-main-category" class="form-select">
@@ -475,33 +639,31 @@
             </select>
           </div>
 
-          <!-- Edit Sub Category -->
           <div class="form-group">
             <label for="edit-file-subcategory-select" class="input-label">Sub Category</label>
             <div class="category-picker-row">
               <select id="edit-file-subcategory-select" class="form-select">
-                <!-- Populated dynamically -->
               </select>
               <input type="text" id="edit-file-subcategory-custom" class="form-input hidden" placeholder="Enter custom subcategory...">
             </div>
           </div>
 
-          <!-- Edit Pricing / Premium Option -->
-          <div class="form-group">
-            <label for="edit-file-pricing-select" class="input-label">Pricing / Access Type</label>
-            <select id="edit-file-pricing-select" class="form-select">
-              <option value="Free">Free</option>
-              <option value="Paid">Premium / Paid</option>
-            </select>
-          </div>
+          <div class="form-row-2col">
+            <div class="form-group">
+              <label for="edit-file-pricing-select" class="input-label">Pricing Tier</label>
+              <select id="edit-file-pricing-select" class="form-select">
+                <option value="Free">Free Access</option>
+                <option value="Paid">Premium / Paid</option>
+              </select>
+            </div>
 
-          <!-- Edit Sticker Format Option (PNG vs SVG) -->
-          <div class="form-group hidden" id="edit-file-format-group">
-            <label for="edit-file-format-select" class="input-label">Sticker Format</label>
-            <select id="edit-file-format-select" class="form-select">
-              <option value="PNG">PNG</option>
-              <option value="SVG">SVG</option>
-            </select>
+            <div class="form-group hidden" id="edit-file-format-group">
+              <label for="edit-file-format-select" class="input-label">Sticker Format</label>
+              <select id="edit-file-format-select" class="form-select">
+                <option value="PNG">PNG Raster</option>
+                <option value="SVG">SVG Vector</option>
+              </select>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -511,46 +673,137 @@
       </div>
     </div>
 
-    <!-- Modal: API Key & Permissions Configuration -->
+    <!-- DEDICATED SECURITY & API KEYS PAGE / MODAL -->
     <div class="modal-backdrop hidden" id="auth-modal">
-      <div class="modal-dialog">
+      <div class="modal-dialog modal-lg">
         <div class="modal-header">
-          <h3>Authentication & Permissions</h3>
+          <div class="modal-title-group">
+            <svg class="icon text-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5M7 17l-4.5 4.5A2 2 0 0 0 2 23h4v-2h2v-2h2v-2h2v-2l-1.5-1.5M15 5l4 4"></path><circle cx="15.5" cy="8.5" r="2.5"></circle></svg>
+            <div>
+              <h3>Security & API Keys Setup Page</h3>
+              <p class="modal-subtitle">Configure active Bearer tokens, manage permissions & issue new system keys</p>
+            </div>
+          </div>
           <button class="modal-close-btn" id="close-auth-modal">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
+        
         <div class="modal-body">
-          <p class="modal-hint">Select a pre-seeded permission profile or enter your custom Bearer token. Secret keys are never exposed in client source code.</p>
-          
-          <div class="preset-keys-grid">
-            <div class="preset-key-card" data-key="aperture_adm_secret_key_2026" data-name="Admin Master Key">
-              <div class="preset-badge badge-admin">Master Admin</div>
-              <h4>Full Access</h4>
-              <p>files:read, files:upload, files:delete, files:manage</p>
+          <!-- SECTION 1: Active Bearer Authorization Profile -->
+          <div class="security-section">
+            <div class="security-section-title">
+              <span class="badge badge-main-image">1. Active Authorization Profile</span>
+              <h4>Configure Client Bearer Token</h4>
             </div>
-            <div class="preset-key-card active" data-key="aperture_upl_secret_key_2026" data-name="Upload Service Key">
-              <div class="preset-badge badge-upload">Uploader</div>
-              <h4>Upload & Read</h4>
-              <p>files:read, files:upload</p>
+            
+            <div class="preset-keys-grid">
+              <div class="preset-key-card" data-key="aperture_adm_secret_key_2026" data-name="Admin Master Key">
+                <div class="preset-badge badge-admin">Master Admin</div>
+                <h4>Full Access Key</h4>
+                <p class="font-mono">files:read, upload, delete, manage</p>
+              </div>
+              <div class="preset-key-card active" data-key="aperture_upl_secret_key_2026" data-name="Upload Service Key">
+                <div class="preset-badge badge-upload">Uploader</div>
+                <h4>Upload & Read Key</h4>
+                <p class="font-mono">files:read, files:upload</p>
+              </div>
+              <div class="preset-key-card" data-key="aperture_ro_secret_key_2026" data-name="Read-Only Key">
+                <div class="preset-badge badge-readonly">Read Only</div>
+                <h4>Viewer Key</h4>
+                <p class="font-mono">files:read</p>
+              </div>
             </div>
-            <div class="preset-key-card" data-key="aperture_ro_secret_key_2026" data-name="Read-Only Key">
-              <div class="preset-badge badge-readonly">Read Only</div>
-              <h4>Viewer</h4>
-              <p>files:read</p>
+
+            <div class="form-group" style="margin-top: 0.85rem;">
+              <label for="custom-api-key-input" class="input-label">Active Bearer Secret Token</label>
+              <div class="input-with-action">
+                <input type="password" id="custom-api-key-input" class="form-input font-mono" placeholder="Bearer YOUR_API_KEY">
+                <button type="button" id="toggle-key-visibility" class="btn btn-secondary btn-sm">Show</button>
+                <button type="button" id="save-auth-btn" class="btn btn-primary btn-sm">Apply Key</button>
+              </div>
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="custom-api-key-input">Active Bearer Token</label>
-            <div class="input-with-action">
-              <input type="password" id="custom-api-key-input" class="form-input" placeholder="Bearer YOUR_API_KEY">
-              <button type="button" id="toggle-key-visibility" class="btn btn-secondary btn-sm">Show</button>
+          <!-- SECTION 2: Generate New API Key -->
+          <div class="security-section" style="margin-top: 1.25rem;">
+            <div class="security-section-title">
+              <span class="badge badge-main-font">2. Issue New System API Key</span>
+              <h4>Create Custom Key with Scopes</h4>
+            </div>
+
+            <form id="create-key-form" class="create-key-box">
+              <div class="form-row-2col">
+                <div class="form-group">
+                  <label for="new-key-name" class="input-label">Key Name / Description</label>
+                  <input type="text" id="new-key-name" class="form-input" placeholder="e.g. Mobile App Key" required>
+                </div>
+                <div class="form-group">
+                  <label for="new-key-custom" class="input-label">Custom Secret String (Optional)</label>
+                  <input type="text" id="new-key-custom" class="form-input font-mono" placeholder="Leave blank to auto-generate">
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 0.75rem;">
+                <label class="input-label">Select Granted Permission Scopes</label>
+                <div class="scopes-checkbox-grid">
+                  <label class="scope-checkbox-label">
+                    <input type="checkbox" value="files:read" checked class="scope-checkbox">
+                    <span><code>files:read</code> (View & Download)</span>
+                  </label>
+                  <label class="scope-checkbox-label">
+                    <input type="checkbox" value="files:upload" checked class="scope-checkbox">
+                    <span><code>files:upload</code> (Upload Assets)</span>
+                  </label>
+                  <label class="scope-checkbox-label">
+                    <input type="checkbox" value="files:delete" class="scope-checkbox">
+                    <span><code>files:delete</code> (Delete Files)</span>
+                  </label>
+                  <label class="scope-checkbox-label">
+                    <input type="checkbox" value="files:manage" class="scope-checkbox">
+                    <span><code>files:manage</code> (Manage API Keys)</span>
+                  </label>
+                </div>
+              </div>
+
+              <button type="submit" id="create-key-btn" class="btn btn-primary btn-sm" style="margin-top: 0.85rem;">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Generate & Issue API Key</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- SECTION 3: System API Keys Registry -->
+          <div class="security-section" style="margin-top: 1.25rem;">
+            <div class="security-section-title">
+              <span class="badge badge-subtle">3. API Keys Database Registry</span>
+              <h4>Active Registered Keys in MongoDB Atlas / SQLite</h4>
+            </div>
+
+            <div class="table-container" style="max-height: 240px; overflow-y: auto;">
+              <table class="files-table" id="keys-table">
+                <thead>
+                  <tr>
+                    <th>Key Name</th>
+                    <th>Permissions</th>
+                    <th>Created At</th>
+                    <th class="text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="keys-table-body">
+                  <tr>
+                    <td colspan="4" class="empty-placeholder">
+                      <p>Loading registered API keys...</p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
+
         </div>
         <div class="modal-footer">
-          <button type="button" id="save-auth-btn" class="btn btn-primary">Apply API Key</button>
+          <button type="button" id="close-auth-modal-btn" class="btn btn-secondary">Close Security Center</button>
         </div>
       </div>
     </div>
@@ -559,109 +812,122 @@
     <div class="modal-backdrop hidden" id="docs-modal">
       <div class="modal-dialog modal-lg">
         <div class="modal-header">
-          <h3>REST API Quick Reference & cURL Examples</h3>
+          <div class="modal-title-group">
+            <svg class="icon text-indigo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+            <h3>REST API Quick Reference & cURL Examples</h3>
+          </div>
           <button class="modal-close-btn" id="close-docs-modal">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
         <div class="modal-body">
           <div class="docs-section">
-            <h4>1. Get Image Presets Only</h4>
-            <div class="code-block">
-              <code>curl -X GET http://localhost:3000/api/presets/image
+            <div class="docs-section-header">
+              <span class="badge badge-main-image">Presets API</span>
+              <h4>1. Get Image Presets Only</h4>
+            </div>
+            <div class="code-block-wrapper">
+              <pre class="code-block"><code>curl -X GET http://localhost:3000/api/presets/image
 # Or filter by subcategory:
-curl -X GET http://localhost:3000/api/presets/image/Vintage</code>
+curl -X GET http://localhost:3000/api/presets/image/Vintage</code></pre>
             </div>
           </div>
 
           <div class="docs-section">
-            <h4>2. Get Text Presets Only</h4>
-            <div class="code-block">
-              <code>curl -X GET http://localhost:3000/api/presets/text
+            <div class="docs-section-header">
+              <span class="badge badge-main-text">Presets API</span>
+              <h4>2. Get Text Presets Only</h4>
+            </div>
+            <div class="code-block-wrapper">
+              <pre class="code-block"><code>curl -X GET http://localhost:3000/api/presets/text
 # Or filter by subcategory:
-curl -X GET http://localhost:3000/api/presets/text/Quotes</code>
+curl -X GET http://localhost:3000/api/presets/text/Quotes</code></pre>
             </div>
           </div>
 
           <div class="docs-section">
-            <h4>3. Get All Categories & Subcategories Tree</h4>
-            <div class="code-block">
-              <code>curl -X GET http://localhost:3000/api/presets/categories</code>
+            <div class="docs-section-header">
+              <span class="badge badge-subtle">Category Tree</span>
+              <h4>3. Get All Categories & Subcategories Tree</h4>
+            </div>
+            <div class="code-block-wrapper">
+              <pre class="code-block"><code>curl -X GET http://localhost:3000/api/presets/categories</code></pre>
             </div>
           </div>
 
           <div class="docs-section">
-            <h4>4. Upload Preset (with Main Category & Sub Category)</h4>
-            <div class="code-block">
-              <code>curl -X POST http://localhost:3000/api/v1/files \
+            <div class="docs-section-header">
+              <span class="badge badge-upload">Upload API</span>
+              <h4>4. Upload Preset (with Main Category & Sub Category)</h4>
+            </div>
+            <div class="code-block-wrapper">
+              <pre class="code-block"><code>curl -X POST http://localhost:3000/api/v1/files \
   -H "Authorization: Bearer aperture_upl_secret_key_2026" \
   -F "file=@/path/to/preset.dng" \
   -F "title=Amber Sunset" \
   -F "mainCategory=image" \
-  -F "subCategory=Vintage"</code>
+  -F "subCategory=Vintage"</code></pre>
             </div>
           </div>
 
           <div class="docs-section">
-            <h4>5. Edit Preset Title & Category Hierarchy</h4>
-            <div class="code-block">
-              <code>curl -X PATCH http://localhost:3000/api/presets/f_8a72c91e4f2b \
+            <div class="docs-section-header">
+              <span class="badge badge-admin">Edit API</span>
+              <h4>5. Edit Preset Title & Category Hierarchy</h4>
+            </div>
+            <div class="code-block-wrapper">
+              <pre class="code-block"><code>curl -X PATCH http://localhost:3000/api/presets/f_8a72c91e4f2b \
   -H "Content-Type: application/json" \
-  -d '{"title": "Updated Title", "mainCategory": "image", "subCategory": "Cinematic"}'</code>
+  -d '{"title": "Updated Title", "mainCategory": "image", "subCategory": "Cinematic"}'</code></pre>
             </div>
           </div>
 
           <div class="docs-section">
-            <h4>6. Font API - Upload Font</h4>
-            <div class="code-block">
-              <code>curl -X POST http://localhost:3000/api/fonts \
+            <div class="docs-section-header">
+              <span class="badge badge-main-font">Font API</span>
+              <h4>6. Font API - Upload & Get Fonts</h4>
+            </div>
+            <div class="code-block-wrapper">
+              <pre class="code-block"><code>curl -X POST http://localhost:3000/api/fonts \
   -H "Authorization: Bearer aperture_upl_secret_key_2026" \
   -F "file=@/path/to/font.ttf" \
   -F "name=Roboto Bold" \
-  -F "subCategory=Free"</code>
+  -F "subCategory=Free"
+
+curl -X GET http://localhost:3000/api/fonts</code></pre>
             </div>
           </div>
 
           <div class="docs-section">
-            <h4>7. Font API - Get Fonts</h4>
-            <div class="code-block">
-              <code>curl -X GET http://localhost:3000/api/fonts
-# Filter by Free fonts:
-curl -X GET http://localhost:3000/api/fonts/Free</code>
+            <div class="docs-section-header">
+              <span class="badge badge-main-sticker">Sticker API</span>
+              <h4>7. Sticker API - Upload & Get Stickers</h4>
             </div>
-          </div>
-
-          <div class="docs-section">
-            <h4>8. Sticker API - Upload Sticker</h4>
-            <div class="code-block">
-              <code>curl -X POST http://localhost:3000/api/stickers \
+            <div class="code-block-wrapper">
+              <pre class="code-block"><code>curl -X POST http://localhost:3000/api/stickers \
   -H "Authorization: Bearer aperture_upl_secret_key_2026" \
   -F "file=@/path/to/sticker.svg" \
   -F "name=Golden Star Badge" \
-  -F "category=Badges"</code>
+  -F "category=Badges"
+
+curl -X GET http://localhost:3000/api/stickers</code></pre>
             </div>
           </div>
 
           <div class="docs-section">
-            <h4>9. Sticker API - Get Stickers</h4>
-            <div class="code-block">
-              <code>curl -X GET http://localhost:3000/api/stickers
-# Filter by category:
-curl -X GET http://localhost:3000/api/stickers/Badges</code>
+            <div class="docs-section-header">
+              <span class="badge badge-subtle">Streaming</span>
+              <h4>8. Download / Direct File Stream Access</h4>
             </div>
-          </div>
-
-          <div class="docs-section">
-            <h4>10. Download / Direct File Access</h4>
-            <div class="code-block">
-              <code>curl -O -J http://localhost:3000/files/f_8a72c91e4f2b/download</code>
+            <div class="code-block-wrapper">
+              <pre class="code-block"><code>curl -O -J http://localhost:3000/files/f_8a72c91e4f2b/download</code></pre>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Toast Notification -->
+    <!-- Toast Notification Container -->
     <div class="toast-container" id="toast-container"></div>
   </div>
 

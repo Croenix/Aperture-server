@@ -6,16 +6,12 @@ const { requirePermission } = require('../middleware/permissions');
 
 const router = express.Router();
 
-/**
- * GET /api/v1/keys
- * List all API keys. Requires 'files:manage' scope.
- */
 router.get(
   '/',
   authenticateApiKey,
   requirePermission('files:manage'),
-  (req, res) => {
-    const keys = db.listApiKeys();
+  async (req, res) => {
+    const keys = await db.listApiKeys();
     return res.json({
       success: true,
       keys
@@ -23,15 +19,11 @@ router.get(
   }
 );
 
-/**
- * POST /api/v1/keys
- * Create a new API key. Requires 'files:manage' scope.
- */
 router.post(
   '/',
   authenticateApiKey,
   requirePermission('files:manage'),
-  (req, res) => {
+  async (req, res) => {
     const { name, permissions, customKey } = req.body;
 
     if (!name || typeof name !== 'string') {
@@ -64,7 +56,7 @@ router.post(
       : `apt_${crypto.randomBytes(16).toString('hex')}`;
 
     try {
-      const createdKey = db.createApiKey({
+      const createdKey = await db.createApiKey({
         key,
         name: name.trim(),
         permissions: assignedPermissions
@@ -89,15 +81,11 @@ router.post(
   }
 );
 
-/**
- * DELETE /api/v1/keys/:key
- * Revoke an API key. Requires 'files:manage' scope.
- */
 router.delete(
   '/:key',
   authenticateApiKey,
   requirePermission('files:manage'),
-  (req, res) => {
+  async (req, res) => {
     const { key } = req.params;
     if (key === req.apiKey) {
       return res.status(400).json({
@@ -109,7 +97,7 @@ router.delete(
       });
     }
 
-    const deleted = db.deleteApiKey(key);
+    const deleted = await db.deleteApiKey(key);
     if (!deleted) {
       return res.status(404).json({
         success: false,

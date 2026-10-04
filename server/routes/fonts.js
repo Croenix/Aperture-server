@@ -11,20 +11,15 @@ const { getBaseUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
 
-/**
- * Standard default font subcategories (Defaults to Normal + Custom)
- */
 const DEFAULT_FONT_SUBCATEGORIES = [
   'Normal'
 ];
 
-// Ensure temporary upload directory exists
 const tempDir = path.resolve(config.uploadDirectory, '.tmp');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
 
-// Configure Multer storage
 const uploadStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, tempDir);
@@ -52,9 +47,6 @@ const upload = multer({
   }
 });
 
-/**
- * Helper to map a database record to a clean Font response object.
- */
 function toCleanFont(file, reqOrBase = null) {
   const base = getBaseUrl(reqOrBase);
   const subCategory = file.subCategory || file.sub_category || file.category || 'Normal';
@@ -66,10 +58,10 @@ function toCleanFont(file, reqOrBase = null) {
     mainCategory: 'font',
     subCategory: subCategory,
     category: subCategory,
-    fontUrl: `${base}/files/${file.id}`,
-    fileUrl: `${base}/files/${file.id}`,
+    fontUrl: file.directUrl || file.fileUrl || `${base}/files/${file.id}`,
+    fileUrl: file.directUrl || file.fileUrl || `${base}/files/${file.id}`,
     downloadUrl: `${base}/files/${file.id}/download`,
-    viewUrl: `${base}/files/${file.id}/view`,
+    viewUrl: file.directUrl || file.viewUrl || `${base}/files/${file.id}/view`,
     fileName: file.originalName || file.filename,
     fileSize: file.size,
     sizeFormatted: file.sizeFormatted || `${file.size} Bytes`,
@@ -77,13 +69,9 @@ function toCleanFont(file, reqOrBase = null) {
   };
 }
 
-/**
- * GET /api/fonts/categories
- * Returns font subcategories tree.
- */
-router.get('/categories', optionalAuth, (req, res, next) => {
+router.get('/categories', optionalAuth, async (req, res, next) => {
   try {
-    const dbCategories = fileService.listCategories();
+    const dbCategories = await fileService.listCategories();
     const dbFontSubs = (dbCategories && dbCategories.hierarchy && dbCategories.hierarchy.font)
       ? dbCategories.hierarchy.font.map(x => x.subCategory).filter(Boolean)
       : [];
@@ -99,14 +87,6 @@ router.get('/categories', optionalAuth, (req, res, next) => {
   }
 });
 
-/**
- * POST /api/fonts or /api/v1/fonts
- * Upload a font file.
- * Form fields:
- * - 'file' or 'fontFile' (File)
- * - 'name' or 'fontName' or 'title' (String - Font Display Name)
- * - 'category' or 'subCategory' or 'fontStyle' (String - Subcategory e.g. Serif)
- */
 router.post(
   '/',
   optionalAuth,
@@ -159,16 +139,12 @@ router.post(
   }
 );
 
-/**
- * GET /api/fonts or /api/v1/fonts
- * Returns list of fonts, filterable by search or subCategory.
- */
-router.get('/', optionalAuth, (req, res, next) => {
+router.get('/', optionalAuth, async (req, res, next) => {
   try {
     const subCategory = req.query.subCategory || req.query.category || req.query.fontStyle;
     const { search } = req.query;
 
-    const result = fileService.listFiles({
+    const result = await fileService.listFiles({
       page: 1,
       limit: 1000,
       search,
@@ -178,7 +154,6 @@ router.get('/', optionalAuth, (req, res, next) => {
 
     const fonts = result.files.map(f => toCleanFont(f, req));
 
-    // Group by subcategory
     const subGrouped = {};
     fonts.forEach(f => {
       const sub = f.subCategory || 'Sans-Serif';
@@ -199,25 +174,19 @@ router.get('/', optionalAuth, (req, res, next) => {
   }
 });
 
-/**
- * GET /api/fonts/:subCategory
- * Returns fonts filtered by subCategory or metadata by ID.
- */
-router.get('/:subCategoryOrId', optionalAuth, (req, res, next) => {
+router.get('/:subCategoryOrId', optionalAuth, async (req, res, next) => {
   try {
     const param = req.params.subCategoryOrId;
 
-    // Check if param is a file ID (e.g. f_...)
     if (param.startsWith('f_')) {
-      const fileData = fileService.getFileMetadata(param, req);
+      const fileData = await fileService.getFileMetadata(param, req);
       return res.json({
         success: true,
         font: toCleanFont(fileData, req)
       });
     }
 
-    // Otherwise treat as subCategory
-    const result = fileService.listFiles({
+    const result = await fileService.listFiles({
       page: 1,
       limit: 1000,
       mainCategory: 'font',
@@ -238,15 +207,11 @@ router.get('/:subCategoryOrId', optionalAuth, (req, res, next) => {
   }
 });
 
-/**
- * PATCH /api/fonts/:id or PUT /api/fonts/:id
- * Edit font details (name, subCategory).
- */
-const handleUpdateFont = (req, res, next) => {
+const handleUpdateFont = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, fontName, title, subCategory, category } = req.body;
-    const updated = fileService.updateFile(id, {
+    const updated = await fileService.updateFile(id, {
       title: name || fontName || title,
       mainCategory: 'font',
       subCategory: subCategory || category
@@ -265,10 +230,6 @@ const handleUpdateFont = (req, res, next) => {
 router.patch('/:id', optionalAuth, handleUpdateFont);
 router.put('/:id', optionalAuth, handleUpdateFont);
 
-/**
- * DELETE /api/fonts/:id
- * Remove font file and database entry.
- */
 router.delete('/:id', optionalAuth, async (req, res, next) => {
   try {
     const { id } = req.params;

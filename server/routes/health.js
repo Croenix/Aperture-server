@@ -1,28 +1,53 @@
 const express = require('express');
 const fs = require('fs');
+const mongoose = require('mongoose');
+const cloudinary = require('cloudinary').v2;
 const config = require('../config');
-const { db } = require('../database');
+const db = require('../database');
 const { getBaseUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
 
 /**
- * GET /api/v1/health
- * Returns server health, database connectivity, storage status, and runtime metrics.
+ * GET /api/v1/health & /api/health
+ * Returns server health, MongoDB Atlas status, Cloudinary status, storage status, and metrics.
  */
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   let dbStatus = 'healthy';
   let totalFiles = 0;
   let totalApiKeys = 0;
 
   try {
-    const fileCountRow = db.prepare('SELECT COUNT(*) as count FROM files WHERE is_deleted = 0').get();
-    totalFiles = fileCountRow ? fileCountRow.count : 0;
-
-    const keyCountRow = db.prepare('SELECT COUNT(*) as count FROM api_keys WHERE is_active = 1').get();
-    totalApiKeys = keyCountRow ? keyCountRow.count : 0;
+    const list = await db.listFiles({ limit: 1 });
+    totalFiles = list.pagination ? list.pagination.total : 0;
+    const keys = await db.listApiKeys();
+    totalApiKeys = keys.length;
   } catch (err) {
     dbStatus = 'degraded';
+  }
+
+  // MongoDB Atlas Live Status Check
+  const mongoConnected = mongoose.connection.readyState === 1;
+  const mongoStatus = mongoConnected ? 'connected' : (mongoose.connection.readyState === 2 ? 'connecting' : 'disconnected');
+
+  // Cloudinary Live Status Check
+  let cloudinaryStatus = 'not_configured';
+  let cloudinaryCloudName = config.cloudinary.cloudName || null;
+  if (config.cloudinary.cloudName && config.cloudinary.apiKey && config.cloudinary.apiSecret) {
+    cloudinaryStatus = 'configured';
+    try {
+      cloudinary.config({
+        cloud_name: config.cloudinary.cloudName,
+        api_key: config.cloudinary.apiKey,
+        api_secret: config.cloudinary.apiSecret
+      });
+      const ping = await cloudinary.api.ping();
+      if (ping && ping.status === 'ok') {
+        cloudinaryStatus = 'connected';
+      }
+    } catch (err) {
+      cloudinaryStatus = 'error';
+    }
   }
 
   let storageStatus = 'healthy';
@@ -36,7 +61,7 @@ router.get('/', (req, res) => {
 
   return res.json({
     success: true,
-    status: (dbStatus === 'healthy' && storageStatus === 'healthy') ? 'healthy' : 'degraded',
+    status: (mongoConnected && dbStatus === 'healthy') ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
     service: {
@@ -45,6 +70,23 @@ router.get('/', (req, res) => {
       baseUrl: getBaseUrl(req),
       storageProvider: config.storageProvider,
       maxFileSizeMb: config.maxFileSizeMb
+    },
+    connections: {
+      mongodb: {
+        status: mongoStatus,
+        connected: mongoConnected,
+        uriConfigured: Boolean(config.mongodbUri)
+      },
+      cloudinary: {
+        status: cloudinaryStatus,
+        connected: cloudinaryStatus === 'connected' || cloudinaryStatus === 'configured',
+        cloudName: cloudinaryCloudName,
+        folder: config.cloudinary.folder
+      },
+      server: {
+        status: 'online',
+        port: config.port
+      }
     },
     components: {
       database: {

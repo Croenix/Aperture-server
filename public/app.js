@@ -1,38 +1,21 @@
 /**
- * APERTURE FILE SERVER - FRONTEND CONTROLLER
- * Two-level Hierarchical Category System (Main: Image / Text, Sub: Vintage, Modern, B&W, etc.)
+ * APERTURE CLOUD VAULT - FRONTEND CONTROLLER
+ * Hierarchical Category System, Grid/Table View Toggles, Dynamic Vault Metrics & Live Search
  */
 
 (function () {
   'use strict';
 
   const DEFAULT_IMAGE_SUBCATEGORIES = [
-    'Vintage',
-    'Modern',
-    'Black & White',
-    'Cinematic',
-    'Portrait',
-    'Landscape',
-    'Moody',
-    'Warm Tones',
-    'Cool Tones',
-    'Cyberpunk'
+    'Vintage', 'Modern', 'Black & White', 'Cinematic', 'Portrait',
+    'Landscape', 'Moody', 'Warm Tones', 'Cool Tones', 'Cyberpunk'
   ];
 
-  const DEFAULT_FONT_SUBCATEGORIES = [
-    'Normal'
-  ];
+  const DEFAULT_FONT_SUBCATEGORIES = ['Normal'];
 
   const DEFAULT_STICKER_CATEGORIES = [
-    'Badges',
-    'Emoji',
-    'Decorative',
-    'Icons',
-    'Anime',
-    'Logos',
-    'Vectors',
-    'Labels',
-    'Illustrations'
+    'Badges', 'Emoji', 'Decorative', 'Icons', 'Anime',
+    'Logos', 'Vectors', 'Labels', 'Illustrations'
   ];
 
   // Application State
@@ -46,7 +29,9 @@
     searchQuery: '',
     selectedMainFilter: 'all',
     selectedSubFilter: 'all',
+    viewMode: localStorage.getItem('aperture_view_mode') || 'grid',
     totalPages: 1,
+    filesList: [],
     categoriesTree: {
       image: [...DEFAULT_IMAGE_SUBCATEGORIES],
       text: [],
@@ -74,7 +59,7 @@
     cancelSelectedBtn: document.getElementById('cancel-selected-btn'),
     startUploadBtn: document.getElementById('start-upload-btn'),
 
-    // Upload Meta Form (Hierarchical Categories)
+    // Upload Meta Form
     customTitleInput: document.getElementById('custom-title-input'),
     uploadMainCategory: document.getElementById('upload-main-category'),
     uploadPricingSelect: document.getElementById('upload-pricing-select'),
@@ -118,6 +103,9 @@
     chooseAnotherBtn: document.getElementById('choose-another-btn'),
 
     // Explorer / File Manager
+    filesGridContainer: document.getElementById('files-grid-container'),
+    filesGridBody: document.getElementById('files-grid-body'),
+    filesTableContainer: document.getElementById('files-table-container'),
     filesTableBody: document.getElementById('files-table-body'),
     fileSearchInput: document.getElementById('file-search-input'),
     mainCategoryFilterSelect: document.getElementById('main-category-filter-select'),
@@ -127,6 +115,21 @@
     paginationInfo: document.getElementById('pagination-info'),
     prevPageBtn: document.getElementById('prev-page-btn'),
     nextPageBtn: document.getElementById('next-page-btn'),
+
+    // View Toggles
+    viewGridBtn: document.getElementById('view-grid-btn'),
+    viewTableBtn: document.getElementById('view-table-btn'),
+
+    // Category Pills
+    categoryPills: document.querySelectorAll('.category-pill'),
+
+    // Metrics Stat Elements
+    statTotalCount: document.getElementById('stat-total-count'),
+    statImageCount: document.getElementById('stat-image-count'),
+    statTextCount: document.getElementById('stat-text-count'),
+    statFontCount: document.getElementById('stat-font-count'),
+    statStickerCount: document.getElementById('stat-sticker-count'),
+    statStorageTotal: document.getElementById('stat-storage-total'),
 
     // Edit Modal Elements
     editModal: document.getElementById('edit-modal'),
@@ -142,15 +145,29 @@
     editFileFormatGroup: document.getElementById('edit-file-format-group'),
     editFileFormatSelect: document.getElementById('edit-file-format-select'),
 
-    // Auth & Docs Modals
+    // Status Indicator Pills
+    mongoStatusPill: document.getElementById('mongo-status-pill'),
+    mongoStatusText: document.getElementById('mongo-status-text'),
+    cloudinaryStatusPill: document.getElementById('cloudinary-status-pill'),
+    cloudinaryStatusText: document.getElementById('cloudinary-status-text'),
+    serverStatusPill: document.getElementById('server-status-pill'),
+    serverStatusText: document.getElementById('server-status-text'),
+
+    // Auth & Security Page Modals
     authConfigBtn: document.getElementById('auth-config-btn'),
     activeKeyName: document.getElementById('active-key-name'),
     authModal: document.getElementById('auth-modal'),
     closeAuthModal: document.getElementById('close-auth-modal'),
+    closeAuthModalBtn: document.getElementById('close-auth-modal-btn'),
     customApiKeyInput: document.getElementById('custom-api-key-input'),
     saveAuthBtn: document.getElementById('save-auth-btn'),
     toggleKeyVisibility: document.getElementById('toggle-key-visibility'),
     presetKeyCards: document.querySelectorAll('.preset-key-card'),
+    createKeyForm: document.getElementById('create-key-form'),
+    newKeyName: document.getElementById('new-key-name'),
+    newKeyCustom: document.getElementById('new-key-custom'),
+    createKeyBtn: document.getElementById('create-key-btn'),
+    keysTableBody: document.getElementById('keys-table-body'),
 
     docsBtn: document.getElementById('docs-btn'),
     docsModal: document.getElementById('docs-modal'),
@@ -175,13 +192,19 @@
     if (!isoString) return '-';
     try {
       const date = new Date(isoString);
-      return date.toLocaleString();
+      return date.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
     } catch {
       return isoString;
     }
   }
 
-  // Utility: Show Toast Notification
+  // Utility: Toast Notification
   function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type === 'error' ? 'toast-error' : type === 'success' ? 'toast-success' : ''}`;
@@ -214,7 +237,7 @@
       .replace(/'/g, '&#039;');
   }
 
-  // Switch View States
+  // Switch View States (Ready, Uploading, Success, Failure)
   function switchState(stateName) {
     elements.stateReady.classList.add('hidden');
     elements.stateUploading.classList.add('hidden');
@@ -255,7 +278,25 @@
     }
   }
 
-  // Populate dynamic subcategory options for a given main category and target select element
+  // Switch Repository Explorer View Mode (Grid vs Table)
+  function setViewMode(mode) {
+    state.viewMode = mode;
+    localStorage.setItem('aperture_view_mode', mode);
+
+    if (mode === 'grid') {
+      if (elements.viewGridBtn) elements.viewGridBtn.classList.add('active');
+      if (elements.viewTableBtn) elements.viewTableBtn.classList.remove('active');
+      elements.filesGridContainer.classList.remove('hidden');
+      elements.filesTableContainer.classList.add('hidden');
+    } else {
+      if (elements.viewGridBtn) elements.viewGridBtn.classList.remove('active');
+      if (elements.viewTableBtn) elements.viewTableBtn.classList.add('active');
+      elements.filesGridContainer.classList.add('hidden');
+      elements.filesTableContainer.classList.remove('hidden');
+    }
+  }
+
+  // Populate dynamic subcategory options
   function populateSubcategorySelect(selectEl, customInputEl, mainCategory, currentSub = '') {
     selectEl.innerHTML = '';
 
@@ -282,13 +323,11 @@
       });
     }
 
-    // Add option to type custom subcategory
     const customOpt = document.createElement('option');
     customOpt.value = '__custom__';
     customOpt.textContent = (list.length === 0) ? '+ Add Category (Required)' : '+ Enter Custom Category...';
     selectEl.appendChild(customOpt);
 
-    // If list is empty, default select custom and show input
     if (list.length === 0 || (currentSub && !list.some(s => s.toLowerCase() === currentSub.toLowerCase()))) {
       selectEl.value = '__custom__';
       customInputEl.classList.remove('hidden');
@@ -314,16 +353,16 @@
 
     if (mainCategory === 'image') {
       if (elements.toggleCatImage) elements.toggleCatImage.classList.add('active');
-      elements.subcategoryLabelHint.textContent = '(Select image preset style or add custom)';
+      elements.subcategoryLabelHint.textContent = '(Select style e.g. Vintage)';
     } else if (mainCategory === 'text') {
       if (elements.toggleCatText) elements.toggleCatText.classList.add('active');
-      elements.subcategoryLabelHint.textContent = '(Enter or select text preset category)';
+      elements.subcategoryLabelHint.textContent = '(Select or enter category)';
     } else if (mainCategory === 'font') {
       if (elements.toggleCatFont) elements.toggleCatFont.classList.add('active');
-      elements.subcategoryLabelHint.textContent = '(Select Normal or enter custom font category)';
+      elements.subcategoryLabelHint.textContent = '(Select font category)';
     } else if (mainCategory === 'sticker') {
       if (elements.toggleCatSticker) elements.toggleCatSticker.classList.add('active');
-      elements.subcategoryLabelHint.textContent = '(Select sticker category e.g. Badges, Emoji or add custom)';
+      elements.subcategoryLabelHint.textContent = '(Select sticker style)';
     }
 
     if (elements.stickerFormatOptionGroup) {
@@ -337,17 +376,39 @@
     populateSubcategorySelect(elements.customSubcategorySelect, elements.customSubcategoryInput, mainCategory);
   }
 
+  // Set Main Filter for Repository Explorer (via Pills, Select, or Stat Cards)
+  function setMainFilter(mainCategory) {
+    state.selectedMainFilter = mainCategory;
+    state.currentPage = 1;
+
+    // Sync HTML Select
+    if (elements.mainCategoryFilterSelect) {
+      elements.mainCategoryFilterSelect.value = mainCategory;
+    }
+
+    // Sync Pills UI
+    elements.categoryPills.forEach(pill => {
+      const cat = pill.getAttribute('data-category');
+      if (cat === mainCategory) {
+        pill.classList.add('active');
+      } else {
+        pill.classList.remove('active');
+      }
+    });
+
+    updateSubcategoryFilterDropdown();
+    fetchFilesList();
+  }
+
   // Handle File Selection
   function handleFileSelected(file) {
     if (!file) return;
     state.currentFile = file;
 
-    // Auto-generate readable title
     const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
     const cleanTitle = baseName.replace(/[-_]+/g, ' ').trim();
     elements.customTitleInput.value = cleanTitle;
 
-    // Auto-detect main category based on file extension
     const ext = file.name.split('.').pop().toLowerCase();
     const isFontFile = ['ttf', 'otf', 'woff', 'woff2', 'eot'].includes(ext);
     const isStickerFile = ['svg', 'png'].includes(ext);
@@ -370,7 +431,7 @@
     switchState('ready');
   }
 
-  // Execute Upload via XMLHttpRequest
+  // Execute Upload via XHR
   function executeUpload() {
     if (!state.currentFile) {
       showToast('Please select a file first.', 'error');
@@ -410,7 +471,6 @@
     const xhr = new XMLHttpRequest();
     state.activeXhr = xhr;
 
-    // Progress Listener
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable) {
         const percent = Math.round((e.loaded / e.total) * 100);
@@ -426,7 +486,6 @@
       }
     });
 
-    // Success / Error Listener
     xhr.addEventListener('load', () => {
       state.activeXhr = null;
       let response = null;
@@ -452,7 +511,6 @@
         else if (mainCat === 'font') badgeHtml = '<span class="badge badge-main-font">Font</span>';
         else if (mainCat === 'sticker') badgeHtml = '<span class="badge badge-main-sticker">Sticker</span>';
 
-        // Populate Success State
         elements.successTitle.textContent = file.title || file.name || file.originalName;
         elements.successMainCategory.innerHTML = badgeHtml;
         elements.successSubCategory.innerHTML = `<span class="badge badge-subcategory">${escapeHtml(file.subCategory || file.category || 'General')}</span>`;
@@ -468,7 +526,7 @@
         elements.successDownloadLink.href = file.downloadUrl || `${file.fileUrl || file.url}/download`;
 
         switchState('success');
-        showToast('File uploaded successfully!', 'success');
+        showToast('File uploaded successfully to Vault!', 'success');
         fetchCategories();
         fetchFilesList();
       } else {
@@ -482,7 +540,6 @@
       }
     });
 
-    // Network / Abort Errors
     xhr.addEventListener('error', () => {
       state.activeXhr = null;
       elements.errorCodeBadge.textContent = 'NETWORK_ERROR';
@@ -503,7 +560,6 @@
     xhr.send(formData);
   }
 
-  // Cancel Upload
   function cancelUpload() {
     if (state.activeXhr) {
       state.activeXhr.abort();
@@ -542,10 +598,7 @@
         }
       }
 
-      // Refresh Subcategory filter dropdown in explorer
       updateSubcategoryFilterDropdown();
-
-      // Refresh upload subcategory picker
       populateSubcategorySelect(
         elements.customSubcategorySelect,
         elements.customSubcategoryInput,
@@ -556,7 +609,7 @@
     }
   }
 
-  // Update Explorer Subcategory Filter dropdown based on current selected Main Category filter
+  // Update Explorer Subcategory Filter dropdown
   function updateSubcategoryFilterDropdown() {
     const currentSub = state.selectedSubFilter;
     elements.categoryFilterSelect.innerHTML = '<option value="all">All Subcategories</option>';
@@ -596,7 +649,7 @@
     }
   }
 
-  // Fetch Files List from API
+  // Fetch Files List & Update Metrics
   async function fetchFilesList() {
     try {
       const url = new URL('/api/v1/files', window.location.origin);
@@ -621,27 +674,67 @@
       const data = await res.json();
 
       if (res.ok && data.success) {
-        renderFilesTable(data.files, data.pagination);
+        state.filesList = data.files || [];
+        renderFiles(data.files, data.pagination);
+        updateVaultMetrics();
       } else {
-        renderEmptyTable(data.error ? data.error.message : 'Failed to fetch files');
+        renderEmptyState(data.error ? data.error.message : 'Failed to fetch presets');
       }
     } catch (err) {
-      renderEmptyTable('Could not connect to presets API');
+      renderEmptyState('Could not connect to presets API');
+    }
+  }
+
+  // Update Metrics Header Stat Cards
+  async function updateVaultMetrics() {
+    try {
+      const headers = state.apiKey ? { 'Authorization': `Bearer ${state.apiKey.trim()}` } : {};
+      const res = await fetch('/api/v1/files?limit=1000', { headers });
+      const data = await res.json();
+
+      if (res.ok && data.success && data.files) {
+        const files = data.files;
+        const totalCount = files.length;
+        let imageCount = 0;
+        let textCount = 0;
+        let fontCount = 0;
+        let stickerCount = 0;
+        let totalStorageBytes = 0;
+
+        files.forEach(f => {
+          const cat = (f.mainCategory || 'image').toLowerCase();
+          if (cat === 'image') imageCount++;
+          else if (cat === 'text') textCount++;
+          else if (cat === 'font') fontCount++;
+          else if (cat === 'sticker') stickerCount++;
+
+          totalStorageBytes += (f.size || f.fileSize || 0);
+        });
+
+        if (elements.statTotalCount) elements.statTotalCount.textContent = totalCount;
+        if (elements.statImageCount) elements.statImageCount.textContent = imageCount;
+        if (elements.statTextCount) elements.statTextCount.textContent = textCount;
+        if (elements.statFontCount) elements.statFontCount.textContent = fontCount;
+        if (elements.statStickerCount) elements.statStickerCount.textContent = stickerCount;
+        if (elements.statStorageTotal) elements.statStorageTotal.textContent = formatBytes(totalStorageBytes);
+      }
+    } catch (err) {
+      // Non-blocking
     }
   }
 
   // Helper for Main Category Badge
   function getMainCategoryBadge(mainCat) {
     const cat = (mainCat || 'image').toLowerCase();
-    if (cat === 'image') return `<span class="badge badge-main-image">Image Preset</span>`;
-    if (cat === 'text') return `<span class="badge badge-main-text">Text Preset</span>`;
+    if (cat === 'image') return `<span class="badge badge-main-image">Image</span>`;
+    if (cat === 'text') return `<span class="badge badge-main-text">Text</span>`;
     if (cat === 'font') return `<span class="badge badge-main-font">Font</span>`;
     if (cat === 'sticker') return `<span class="badge badge-main-sticker">Sticker</span>`;
     return `<span class="badge badge-main-image">${escapeHtml(cat)}</span>`;
   }
 
-  // Render Table
-  function renderFilesTable(files, pagination) {
+  // Render Files (Both Grid and Table)
+  function renderFiles(files, pagination) {
     elements.fileTotalCount.textContent = `${pagination.total} ${pagination.total === 1 ? 'item' : 'items'}`;
     state.totalPages = pagination.totalPages;
     elements.paginationInfo.textContent = `Page ${pagination.page} of ${pagination.totalPages}`;
@@ -649,10 +742,107 @@
     elements.nextPageBtn.disabled = pagination.page >= pagination.totalPages;
 
     if (!files || files.length === 0) {
-      renderEmptyTable('No items found matching your filter. Upload your first file above!');
+      renderEmptyState('No preset files found matching your filter.');
       return;
     }
 
+    renderGridCards(files);
+    renderFilesTable(files);
+  }
+
+  // Render Grid View
+  function renderGridCards(files) {
+    elements.filesGridBody.innerHTML = '';
+
+    files.forEach(file => {
+      const card = document.createElement('div');
+      card.className = 'preset-card';
+
+      const mainCat = (file.mainCategory || 'image').toLowerCase();
+      const subCategory = file.subCategory || file.category || 'General';
+      const pricing = file.pricing || (file.isPremium ? 'Paid' : 'Free');
+      const format = file.format || file.stickerFormat || (file.mimeType && file.mimeType.includes('svg') ? 'SVG' : 'PNG');
+
+      let iconClass = 'icon-image';
+      let svgIcon = '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline>';
+      if (mainCat === 'text') {
+        iconClass = 'icon-text';
+        svgIcon = '<polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>';
+      } else if (mainCat === 'font') {
+        iconClass = 'icon-font';
+        svgIcon = '<path d="M4 7V4h16v3"></path><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>';
+      } else if (mainCat === 'sticker') {
+        iconClass = 'icon-sticker';
+        svgIcon = '<circle cx="12" cy="12" r="10"></circle><polygon points="12 8 15 15 9 15"></polygon>';
+      }
+
+      const mainBadge = getMainCategoryBadge(file.mainCategory);
+      const pricingBadge = (pricing === 'Paid' || pricing === 'paid' || file.isPremium)
+        ? `<span class="badge badge-pricing-paid">Premium</span>`
+        : `<span class="badge badge-pricing-free">Free</span>`;
+      const formatBadge = (mainCat === 'sticker') ? `<span class="badge badge-format">${escapeHtml(format)}</span>` : '';
+
+      card.innerHTML = `
+        <div class="preset-card-header">
+          <div class="preset-card-icon ${iconClass}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${svgIcon}</svg>
+          </div>
+          <div class="preset-card-badges">
+            ${mainBadge}
+            ${pricingBadge}
+          </div>
+        </div>
+
+        <div class="preset-card-body">
+          <h4 class="preset-card-title" title="${escapeHtml(file.title || file.originalName)}">${escapeHtml(file.title || file.originalName)}</h4>
+          <p class="preset-card-rawname">${escapeHtml(file.originalName)}</p>
+        </div>
+
+        <div class="preset-card-meta">
+          <span class="badge badge-subcategory">${escapeHtml(subCategory)}</span>
+          ${formatBadge}
+          <span class="preset-card-id">${escapeHtml(file.id)}</span>
+          <span class="font-mono">${formatBytes(file.size)}</span>
+        </div>
+
+        <div class="preset-card-actions">
+          <button class="btn btn-glass btn-sm action-edit-btn" 
+            data-id="${escapeHtml(file.id)}" 
+            data-title="${escapeHtml(file.title || file.originalName)}" 
+            data-main="${escapeHtml(file.mainCategory || 'image')}"
+            data-sub="${escapeHtml(subCategory)}" 
+            data-pricing="${escapeHtml(pricing)}"
+            data-format="${escapeHtml(format)}"
+            title="Edit Details">
+            <svg class="icon-sm text-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            Edit
+          </button>
+          <a href="${file.url}/view" target="_blank" class="btn btn-glass btn-sm" title="View / Stream">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </a>
+          <a href="${file.url}/download" class="btn btn-glass btn-sm" title="Download">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </a>
+          <button class="btn btn-glass btn-sm action-copy-btn" data-copy="${escapeHtml(file.fileUrl || file.url)}" title="Copy Link">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+          <button class="btn btn-glass btn-sm action-delete-btn" data-id="${escapeHtml(file.id)}" title="Delete">
+            <svg class="icon-sm text-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </div>
+      `;
+
+      elements.filesGridBody.appendChild(card);
+    });
+
+    bindActionButtons();
+  }
+
+  // Render Table View
+  function renderFilesTable(files) {
     elements.filesTableBody.innerHTML = '';
     files.forEach(file => {
       const tr = document.createElement('tr');
@@ -691,8 +881,7 @@
         <td>${formatTimestamp(file.uploadedAt)}</td>
         <td class="text-right">
           <div class="actions-cell">
-            <!-- Edit Preset Button -->
-            <button class="btn btn-glass btn-sm table-edit-btn" 
+            <button class="btn btn-glass btn-sm action-edit-btn" 
               data-id="${escapeHtml(file.id)}" 
               data-title="${escapeHtml(file.title || file.originalName)}" 
               data-main="${escapeHtml(file.mainCategory || 'image')}"
@@ -711,10 +900,10 @@
             <a href="${file.url}/download" class="btn btn-glass btn-sm" title="Download File">
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             </a>
-            <button class="btn btn-glass btn-sm table-copy-btn" data-copy="${escapeHtml(file.fileUrl || file.url)}" title="Copy Direct URL">
+            <button class="btn btn-glass btn-sm action-copy-btn" data-copy="${escapeHtml(file.fileUrl || file.url)}" title="Copy Direct URL">
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             </button>
-            <button class="btn btn-glass btn-sm table-delete-btn" data-id="${escapeHtml(file.id)}" title="Remove File">
+            <button class="btn btn-glass btn-sm action-delete-btn" data-id="${escapeHtml(file.id)}" title="Remove File">
               <svg class="icon-sm text-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             </button>
           </div>
@@ -723,8 +912,12 @@
       elements.filesTableBody.appendChild(tr);
     });
 
-    // Row Edit Listeners
-    document.querySelectorAll('.table-edit-btn').forEach(btn => {
+    bindActionButtons();
+  }
+
+  // Bind Event Listeners to dynamic Grid/Table action buttons
+  function bindActionButtons() {
+    document.querySelectorAll('.action-edit-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const fileId = btn.getAttribute('data-id');
         const title = btn.getAttribute('data-title');
@@ -754,41 +947,53 @@
       });
     });
 
-    // Row Copy Listeners
-    document.querySelectorAll('.table-copy-btn').forEach(btn => {
+    document.querySelectorAll('.action-copy-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const text = btn.getAttribute('data-copy');
-        navigator.clipboard.writeText(text).then(() => {
-          showToast('Preset URL copied to clipboard!', 'success');
-        });
+        if (text) {
+          navigator.clipboard.writeText(text).then(() => {
+            showToast('Preset Direct URL copied!', 'success');
+          });
+        }
       });
     });
 
-    // Row Delete Listeners
-    document.querySelectorAll('.table-delete-btn').forEach(btn => {
+    document.querySelectorAll('.action-delete-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const fileId = btn.getAttribute('data-id');
-        if (confirm(`Are you sure you want to permanently remove preset '${fileId}'?`)) {
+        if (confirm(`Are you sure you want to permanently delete preset '${fileId}'?`)) {
           await deleteFile(fileId);
         }
       });
     });
   }
 
-  function renderEmptyTable(message) {
-    elements.filesTableBody.innerHTML = `
-      <tr>
-        <td colspan="7" class="empty-placeholder">
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
-            <p>${escapeHtml(message)}</p>
-          </div>
-        </td>
-      </tr>
+  function renderEmptyState(message) {
+    const emptyHtml = `
+      <div class="empty-placeholder">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+          <p>${escapeHtml(message)}</p>
+        </div>
+      </div>
     `;
+
+    if (elements.filesGridBody) elements.filesGridBody.innerHTML = emptyHtml;
+    if (elements.filesTableBody) {
+      elements.filesTableBody.innerHTML = `
+        <tr>
+          <td colspan="7" class="empty-placeholder">
+            <div class="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+              <p>${escapeHtml(message)}</p>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
   }
 
-  // Delete / Remove File API Call
+  // Delete File API Call
   async function deleteFile(fileId) {
     try {
       const res = await fetch(`/api/presets/${fileId}`, {
@@ -798,6 +1003,7 @@
         }
       });
       const data = await res.json();
+
       if (res.ok && data.success) {
         showToast(`Preset '${fileId}' removed successfully.`, 'success');
         fetchFilesList();
@@ -868,7 +1074,44 @@
 
   // Setup Event Listeners
   function initEvents() {
-    // Main Category Toggles (Upload)
+    // View mode toggle listeners
+    if (elements.viewGridBtn) {
+      elements.viewGridBtn.addEventListener('click', () => setViewMode('grid'));
+    }
+    if (elements.viewTableBtn) {
+      elements.viewTableBtn.addEventListener('click', () => setViewMode('table'));
+    }
+
+    // Category Pill Filters
+    elements.categoryPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        const category = pill.getAttribute('data-category');
+        setMainFilter(category);
+      });
+    });
+
+    // Stat Cards Click to Filter
+    ['image', 'text', 'font', 'sticker'].forEach(cat => {
+      const el = document.getElementById(`stat-card-${cat}`);
+      if (el) {
+        el.addEventListener('click', () => {
+          setMainFilter(cat);
+          const explorerEl = document.querySelector('.explorer-section');
+          if (explorerEl) explorerEl.scrollIntoView({ behavior: 'smooth' });
+        });
+      }
+    });
+
+    const statAllEl = document.getElementById('stat-card-all');
+    if (statAllEl) {
+      statAllEl.addEventListener('click', () => {
+        setMainFilter('all');
+        const explorerEl = document.querySelector('.explorer-section');
+        if (explorerEl) explorerEl.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    // Main Category Toggles (Upload Form)
     if (elements.toggleCatImage) {
       elements.toggleCatImage.addEventListener('click', () => setUploadMainCategory('image'));
     }
@@ -892,12 +1135,12 @@
       }
     });
 
-    // Main Category Change in Edit Modal
+    // Edit Modal Main Category Change
     elements.editFileMainCategory.addEventListener('change', (e) => {
       populateSubcategorySelect(elements.editFileSubcategorySelect, elements.editFileSubcategoryCustom, e.target.value);
     });
 
-    // Subcategory Select in Edit Modal
+    // Edit Modal Subcategory Change
     elements.editFileSubcategorySelect.addEventListener('change', (e) => {
       if (e.target.value === '__custom__') {
         elements.editFileSubcategoryCustom.classList.remove('hidden');
@@ -907,13 +1150,12 @@
       }
     });
 
-    // Explorer Main Category Filter Change
-    elements.mainCategoryFilterSelect.addEventListener('change', (e) => {
-      state.selectedMainFilter = e.target.value;
-      state.currentPage = 1;
-      updateSubcategoryFilterDropdown();
-      fetchFilesList();
-    });
+    // Explorer Main Category Select Change
+    if (elements.mainCategoryFilterSelect) {
+      elements.mainCategoryFilterSelect.addEventListener('change', (e) => {
+        setMainFilter(e.target.value);
+      });
+    }
 
     // Explorer Sub Category Filter Change
     elements.categoryFilterSelect.addEventListener('change', (e) => {
@@ -978,7 +1220,6 @@
       elements.fileInput.click();
     });
 
-    // Helper to reset file selection without uploading
     const resetFileSelection = () => {
       state.currentFile = null;
       elements.fileInput.value = '';
@@ -987,7 +1228,6 @@
       switchState('ready');
     };
 
-    // Clear / Cancel Selected File (Does not trigger upload)
     if (elements.clearSelectedBtn) {
       elements.clearSelectedBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1010,7 +1250,6 @@
       });
     }
 
-    // Prevent Enter key in metadata inputs from prematurely submitting
     [elements.customTitleInput, elements.customSubcategoryInput].forEach(input => {
       if (input) {
         input.addEventListener('keydown', (e) => {
@@ -1021,7 +1260,7 @@
       }
     });
 
-    // Start Upload (Explicit user click on Upload button)
+    // Start Upload Click
     elements.startUploadBtn.addEventListener('click', (e) => {
       e.preventDefault();
       executeUpload();
@@ -1032,14 +1271,14 @@
       cancelUpload();
     });
 
-    // Success State Buttons
+    // Success Actions
     elements.uploadAnotherBtn.addEventListener('click', () => {
       state.currentFile = null;
       elements.fileInput.value = '';
       switchState('ready');
     });
 
-    // Failure State Buttons
+    // Failure Actions
     elements.retryUploadBtn.addEventListener('click', () => {
       executeUpload();
     });
@@ -1068,7 +1307,7 @@
       });
     });
 
-    // Search input with debounce
+    // Live Search with Debounce
     let searchDebounce = null;
     elements.fileSearchInput.addEventListener('input', (e) => {
       clearTimeout(searchDebounce);
@@ -1079,11 +1318,11 @@
       }, 300);
     });
 
-    // Refresh files
+    // Refresh Files List
     elements.refreshFilesBtn.addEventListener('click', () => {
       fetchFilesList();
       fetchCategories();
-      showToast('Presets list refreshed.', 'info');
+      showToast('Presets repository refreshed.', 'info');
     });
 
     // Pagination
@@ -1101,15 +1340,19 @@
       }
     });
 
-    // Auth Modal
+    // Auth & Security Center Modal
     elements.authConfigBtn.addEventListener('click', () => {
       elements.customApiKeyInput.value = state.apiKey;
       elements.authModal.classList.remove('hidden');
+      fetchRegisteredKeys();
     });
 
-    elements.closeAuthModal.addEventListener('click', () => {
+    const closeAuthModalFn = () => {
       elements.authModal.classList.add('hidden');
-    });
+    };
+
+    if (elements.closeAuthModal) elements.closeAuthModal.addEventListener('click', closeAuthModalFn);
+    if (elements.closeAuthModalBtn) elements.closeAuthModalBtn.addEventListener('click', closeAuthModalFn);
 
     elements.presetKeyCards.forEach(card => {
       card.addEventListener('click', () => {
@@ -1133,6 +1376,10 @@
 
     elements.saveAuthBtn.addEventListener('click', () => {
       const newKey = elements.customApiKeyInput.value.trim();
+      if (!newKey) {
+        showToast('API Key string cannot be empty.', 'error');
+        return;
+      }
       state.apiKey = newKey;
       sessionStorage.setItem('aperture_api_key', newKey);
 
@@ -1145,7 +1392,55 @@
       showToast(`Active API Key updated (${state.keyName}).`, 'success');
       fetchFilesList();
       fetchCategories();
+      fetchRegisteredKeys();
     });
+
+    // Create New System API Key Handler
+    if (elements.createKeyForm) {
+      elements.createKeyForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const keyName = elements.newKeyName.value.trim();
+        const customKey = elements.newKeyCustom ? elements.newKeyCustom.value.trim() : '';
+
+        const checkedScopes = Array.from(document.querySelectorAll('.scope-checkbox:checked')).map(cb => cb.value);
+        if (checkedScopes.length === 0) {
+          showToast('Please select at least one permission scope.', 'error');
+          return;
+        }
+
+        try {
+          elements.createKeyBtn.disabled = true;
+          elements.createKeyBtn.querySelector('span').textContent = 'Issuing Key...';
+
+          const res = await fetch('/api/v1/keys', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${state.apiKey}`
+            },
+            body: JSON.stringify({
+              name: keyName,
+              customKey: customKey || undefined,
+              permissions: checkedScopes
+            })
+          });
+
+          const data = await res.json();
+          if (data.success) {
+            showToast(`API Key "${keyName}" issued successfully!`, 'success');
+            elements.createKeyForm.reset();
+            fetchRegisteredKeys();
+          } else {
+            showToast(`Failed to issue key: ${data.error?.message || 'Access Denied'}`, 'error');
+          }
+        } catch (err) {
+          showToast('Failed to reach server to issue API Key.', 'error');
+        } finally {
+          elements.createKeyBtn.disabled = false;
+          elements.createKeyBtn.querySelector('span').textContent = 'Generate & Issue API Key';
+        }
+      });
+    }
 
     // Docs Modal
     elements.docsBtn.addEventListener('click', () => {
@@ -1156,7 +1451,7 @@
       elements.docsModal.classList.add('hidden');
     });
 
-    // Close modals on backdrop click
+    // Close Modals on Backdrop Click
     [elements.authModal, elements.docsModal, elements.editModal].forEach(modal => {
       if (!modal) return;
       modal.addEventListener('click', (e) => {
@@ -1167,7 +1462,127 @@
     });
   }
 
-  // Update documentation code snippets to match the actual server host
+  // Live Health Polling
+  async function checkLiveHealth() {
+    try {
+      const res = await fetch('/api/v1/health');
+      if (!res.ok) throw new Error('Health check HTTP ' + res.status);
+      const data = await res.json();
+
+      const mongo = data.connections?.mongodb;
+      if (elements.mongoStatusPill && elements.mongoStatusText) {
+        if (mongo?.connected) {
+          elements.mongoStatusPill.className = 'status-pill status-pill-mongo';
+          elements.mongoStatusText.textContent = 'MongoDB Atlas Connected';
+        } else {
+          elements.mongoStatusPill.className = 'status-pill status-pill-mongo status-offline';
+          elements.mongoStatusText.textContent = 'MongoDB Disconnected';
+        }
+      }
+
+      const cld = data.connections?.cloudinary;
+      if (elements.cloudinaryStatusPill && elements.cloudinaryStatusText) {
+        if (cld?.connected || cld?.status === 'connected' || cld?.status === 'configured') {
+          elements.cloudinaryStatusPill.className = 'status-pill status-pill-cloudinary';
+          elements.cloudinaryStatusText.textContent = `Cloudinary Active (${cld.cloudName || 'sttsmedia'})`;
+        } else {
+          elements.cloudinaryStatusPill.className = 'status-pill status-pill-cloudinary status-offline';
+          elements.cloudinaryStatusText.textContent = 'Cloudinary Offline';
+        }
+      }
+
+      if (elements.serverStatusPill && elements.serverStatusText) {
+        elements.serverStatusPill.className = 'status-pill status-pill-server';
+        elements.serverStatusText.textContent = 'API Server Online';
+      }
+    } catch (err) {
+      if (elements.serverStatusPill && elements.serverStatusText) {
+        elements.serverStatusPill.className = 'status-pill status-pill-server status-offline';
+        elements.serverStatusText.textContent = 'API Server Offline';
+      }
+    }
+  }
+
+  // Fetch Registered System API Keys
+  async function fetchRegisteredKeys() {
+    if (!elements.keysTableBody) return;
+    try {
+      elements.keysTableBody.innerHTML = `<tr><td colspan="4" class="empty-placeholder"><p>Loading registered API keys...</p></td></tr>`;
+      const res = await fetch('/api/v1/keys', {
+        headers: {
+          'Authorization': `Bearer ${state.apiKey}`
+        }
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.keys)) {
+        if (data.keys.length === 0) {
+          elements.keysTableBody.innerHTML = `<tr><td colspan="4" class="empty-placeholder"><p>No registered API keys found in database.</p></td></tr>`;
+          return;
+        }
+
+        elements.keysTableBody.innerHTML = data.keys.map(k => {
+          const permsBadges = (k.permissions || []).map(p => {
+            const shortName = p.replace('files:', '');
+            return `<span class="scope-badge scope-badge-${shortName}">${escapeHtml(p)}</span>`;
+          }).join(' ');
+
+          const isSelf = k.key === state.apiKey;
+          const deleteBtn = isSelf
+            ? `<span class="text-muted" style="font-size:0.75rem;">(Active Key)</span>`
+            : `<button type="button" class="btn btn-secondary btn-sm revoke-key-btn text-danger" data-key="${escapeHtml(k.key)}">Revoke</button>`;
+
+          return `
+            <tr>
+              <td>
+                <div class="font-semibold">${escapeHtml(k.name || 'Unnamed Key')}</div>
+                <div class="font-mono text-secondary" style="font-size: 0.75rem;">${escapeHtml(k.key.substring(0, 14))}...</div>
+              </td>
+              <td>${permsBadges || '<span class="text-muted">None</span>'}</td>
+              <td class="text-secondary" style="font-size:0.8rem;">${formatTimestamp(k.createdAt)}</td>
+              <td class="text-right">${deleteBtn}</td>
+            </tr>
+          `;
+        }).join('');
+
+        // Wire up revoke key buttons
+        elements.keysTableBody.querySelectorAll('.revoke-key-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const targetKey = btn.getAttribute('data-key');
+            if (confirm(`Are you sure you want to revoke API key (${targetKey.substring(0, 10)}...)?`)) {
+              await revokeApiKey(targetKey);
+            }
+          });
+        });
+      } else {
+        elements.keysTableBody.innerHTML = `<tr><td colspan="4" class="empty-placeholder"><p class="text-danger">Failed to load API keys: ${escapeHtml(data.error?.message || 'Access Denied')}</p></td></tr>`;
+      }
+    } catch (err) {
+      elements.keysTableBody.innerHTML = `<tr><td colspan="4" class="empty-placeholder"><p class="text-danger">Failed to load API keys from server.</p></td></tr>`;
+    }
+  }
+
+  // Revoke System API Key
+  async function revokeApiKey(keyToRevoke) {
+    try {
+      const res = await fetch(`/api/v1/keys/${encodeURIComponent(keyToRevoke)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${state.apiKey}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('API Key revoked successfully!', 'success');
+        fetchRegisteredKeys();
+      } else {
+        showToast(`Revocation failed: ${data.error?.message || 'Unknown error'}`, 'error');
+      }
+    } catch (err) {
+      showToast('Error revoking API key.', 'error');
+    }
+  }
+
+  // Update Docs Host URLs
   function updateDocsHostUrls() {
     if (!elements.docsModal) return;
     const origin = window.location.origin;
@@ -1177,15 +1592,18 @@
     });
   }
 
-  // Initialize
+  // Initialize Application
   function init() {
     updateDocsHostUrls();
     elements.activeKeyName.textContent = state.keyName;
+    setViewMode(state.viewMode);
     initEvents();
     setUploadMainCategory('image');
     switchState('ready');
     fetchCategories();
     fetchFilesList();
+    checkLiveHealth();
+    setInterval(checkLiveHealth, 10000);
   }
 
   document.addEventListener('DOMContentLoaded', init);

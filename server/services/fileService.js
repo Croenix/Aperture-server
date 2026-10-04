@@ -6,9 +6,6 @@ const { generateFileId, isValidFileId, sanitizeOriginalFilename } = require('../
 const { getBaseUrl } = require('../utils/urlHelper');
 
 class FileService {
-  /**
-   * Helper to format bytes
-   */
   _formatBytes(bytes, decimals = 2) {
     if (!bytes || bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -18,28 +15,22 @@ class FileService {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   }
 
-  /**
-   * Formats a database record into the standard public file JSON format.
-   * Includes title, mainCategory, subCategory, and direct access URLs.
-   * @param {Object} record - Database file record
-   * @param {Object|string} [reqOrBase] - Express request or custom base URL
-   * @returns {Object} Standardized file JSON
-   */
   formatFileResponse(record, reqOrBase = null) {
     if (!record) return null;
     const base = getBaseUrl(reqOrBase);
     const sizeFormatted = this._formatBytes(record.size);
     const mainCategory = record.mainCategory || record.main_category || 'image';
     const subCategory = record.subCategory || record.sub_category || record.category || 'general';
-
     const isPremium = Boolean(record.isPremium || record.is_premium);
+
+    const directCloudinaryUrl = record.directUrl || record.direct_url || (record.storageMetadata && record.storageMetadata.secureUrl) || null;
 
     return {
       id: record.id,
       title: record.title || record.originalName,
       mainCategory,
       subCategory,
-      category: subCategory, // synced alias
+      category: subCategory,
       isPremium,
       premium: isPremium ? 'Yes' : 'No',
       pricing: isPremium ? 'Paid' : 'Free',
@@ -49,24 +40,16 @@ class FileService {
       size: record.size,
       sizeFormatted: sizeFormatted,
       uploadedAt: record.uploadedAt,
-      // Direct access & streaming endpoints
-      fileUrl: `${base}/files/${record.id}`,
-      directUrl: `${base}/files/${record.id}`,
+      fileUrl: directCloudinaryUrl || `${base}/files/${record.id}`,
+      directUrl: directCloudinaryUrl || `${base}/files/${record.id}`,
+      cloudinaryUrl: directCloudinaryUrl || null,
       downloadUrl: `${base}/files/${record.id}/download`,
-      viewUrl: `${base}/files/${record.id}/view`,
-      url: `${base}/files/${record.id}`,
+      viewUrl: directCloudinaryUrl || `${base}/files/${record.id}/view`,
+      url: directCloudinaryUrl || `${base}/files/${record.id}`,
       apiUrl: `${base}/api/v1/files/${record.id}`
     };
   }
 
-  /**
-   * Processes and stores an uploaded file.
-   * @param {Object} multerFile - File object provided by Multer
-   * @param {Object} metadata - Optional custom metadata { title, mainCategory, subCategory, category }
-   * @param {Object} apiKeyInfo - API Key details (if authenticated)
-   * @param {Object|string} [reqOrBase] - Express request or custom base URL
-   * @returns {Promise<Object>} Formatted file object
-   */
   async processUpload(multerFile, metadata = {}, apiKeyInfo = null, reqOrBase = null) {
     if (!multerFile) {
       const error = new Error('No file was provided in the upload request.');
@@ -80,7 +63,6 @@ class FileService {
     const mimeType = multerFile.mimetype || 'application/octet-stream';
     const storageProvider = getStorageProvider();
 
-    // Custom title and two-level category handling
     const customTitle = (metadata && metadata.title && typeof metadata.title === 'string' && metadata.title.trim())
       ? metadata.title.trim()
       : originalName;
@@ -93,16 +75,17 @@ class FileService {
       ? (metadata.subCategory || metadata.category).trim()
       : 'general';
 
-    // Save physical file via storage provider
+    // Save physical asset via Cloudinary
     const saveResult = await storageProvider.saveFile({
       fileId,
       tempFilePath: multerFile.path,
       originalName,
-      mimeType
+      mimeType,
+      mainCategory
     });
 
-    // Record metadata in SQLite
-    const fileRecord = db.createFile({
+    // Record metadata in MongoDB Atlas & database
+    const fileRecord = await db.createFile({
       id: fileId,
       originalName,
       filename: saveResult.storageFilename,
@@ -114,6 +97,7 @@ class FileService {
       size: saveResult.size || multerFile.size,
       storageProvider: config.storageProvider,
       storagePath: saveResult.storagePath,
+      directUrl: saveResult.directUrl || null,
       storageMetadata: saveResult.storageMetadata,
       uploadedAt: new Date().toISOString(),
       createdBy: apiKeyInfo ? apiKeyInfo.name : 'api'
@@ -122,13 +106,7 @@ class FileService {
     return this.formatFileResponse(fileRecord, reqOrBase);
   }
 
-  /**
-   * Retrieves file metadata by ID.
-   * @param {string} fileId
-   * @param {Object|string} [reqOrBase]
-   * @returns {Object}
-   */
-  getFileMetadata(fileId, reqOrBase = null) {
+  async getFileMetadata(fileId, reqOrBase = null) {
     if (!isValidFileId(fileId)) {
       const error = new Error('Invalid file ID format.');
       error.code = 'INVALID_FILE_ID';
@@ -136,7 +114,7 @@ class FileService {
       throw error;
     }
 
-    const fileRecord = db.getFileById(fileId);
+    const fileRecord = await db.getFileById(fileId);
     if (!fileRecord) {
       const error = new Error(`File with ID '${fileId}' was not found.`);
       error.code = 'FILE_NOT_FOUND';
@@ -147,12 +125,7 @@ class FileService {
     return this.formatFileResponse(fileRecord, reqOrBase);
   }
 
-  /**
-   * Retrieves the raw file record from database.
-   * @param {string} fileId 
-   * @returns {Object}
-   */
-  getFileRecord(fileId) {
+  async getFileRecord(fileId) {
     if (!isValidFileId(fileId)) {
       const error = new Error('Invalid file ID format.');
       error.code = 'INVALID_FILE_ID';
@@ -160,7 +133,7 @@ class FileService {
       throw error;
     }
 
-    const fileRecord = db.getFileById(fileId);
+    const fileRecord = await db.getFileById(fileId);
     if (!fileRecord) {
       const error = new Error(`File with ID '${fileId}' was not found.`);
       error.code = 'FILE_NOT_FOUND';
@@ -171,67 +144,39 @@ class FileService {
     return fileRecord;
   }
 
-  /**
-   * Retrieves a readable stream for a file.
-   * @param {string} fileId 
-   * @param {Object} options - Range stream options
-   * @returns {Promise<{ stream: stream.Readable, fileRecord: Object }>}
-   */
   async getFileStream(fileId, options = {}) {
-    const fileRecord = this.getFileRecord(fileId);
+    const fileRecord = await this.getFileRecord(fileId);
     const storageProvider = getStorageProvider(fileRecord.storageProvider || 'local');
     const stream = await storageProvider.getReadStream(fileRecord, options);
     return { stream, fileRecord };
   }
 
-  /**
-   * Lists files with pagination, search, and two-level category filtering.
-   * @param {Object} queryParams
-   * @param {Object|string} [reqOrBase]
-   * @returns {Object}
-   */
-  listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '', isPremium, pricing } = {}, reqOrBase = null) {
+  async listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '', isPremium, pricing } = {}, reqOrBase = null) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(1000, Math.max(1, parseInt(limit, 10) || 20));
 
-    const result = db.listFiles({ page: pageNum, limit: limitNum, search, category, mainCategory, subCategory, isPremium, pricing });
+    const result = await db.listFiles({ page: pageNum, limit: limitNum, search, category, mainCategory, subCategory, isPremium, pricing });
     return {
       files: result.files.map(f => this.formatFileResponse(f, reqOrBase)),
       pagination: result.pagination
     };
   }
 
-  /**
-   * Returns categories hierarchy.
-   */
-  listCategories() {
-    return db.listCategories();
+  async listCategories() {
+    return await db.listCategories();
   }
 
-  /**
-   * Retrieves files/presets grouped by main and subcategories.
-   * @param {Object} queryParams
-   * @param {Object|string} [reqOrBase]
-   * @returns {Object} Grouped presets structure
-   */
-  getGroupedPresets({ search = '', mainCategory = '' } = {}, reqOrBase = null) {
-    const allFilesResult = db.listFiles({ page: 1, limit: 1000, search, mainCategory });
+  async getGroupedPresets({ search = '', mainCategory = '' } = {}, reqOrBase = null) {
+    const allFilesResult = await db.listFiles({ page: 1, limit: 1000, search, mainCategory });
     const formatted = allFilesResult.files.map(f => this.formatFileResponse(f, reqOrBase));
 
-    const grouped = {
-      image: {},
-      text: {}
-    };
+    const grouped = { image: {}, text: {} };
 
     formatted.forEach(file => {
       const main = file.mainCategory || 'image';
       const sub = file.subCategory || 'general';
-      if (!grouped[main]) {
-        grouped[main] = {};
-      }
-      if (!grouped[main][sub]) {
-        grouped[main][sub] = [];
-      }
+      if (!grouped[main]) grouped[main] = {};
+      if (!grouped[main][sub]) grouped[main][sub] = [];
       grouped[main][sub].push(file);
     });
 
@@ -241,17 +186,10 @@ class FileService {
     };
   }
 
-  /**
-   * Updates metadata (title, mainCategory, subCategory) for an existing file.
-   * @param {string} fileId 
-   * @param {Object} updates { title, mainCategory, subCategory, category }
-   * @param {Object|string} [reqOrBase]
-   * @returns {Object} Updated file response
-   */
-  updateFile(fileId, updates = {}, reqOrBase = null) {
-    this.getFileRecord(fileId); // ensure file exists and valid ID
+  async updateFile(fileId, updates = {}, reqOrBase = null) {
+    await this.getFileRecord(fileId);
 
-    const updated = db.updateFile(fileId, updates);
+    const updated = await db.updateFile(fileId, updates);
     if (!updated) {
       const error = new Error(`File '${fileId}' could not be updated.`);
       error.code = 'UPDATE_FAILED';
@@ -261,20 +199,12 @@ class FileService {
     return this.formatFileResponse(updated, reqOrBase);
   }
 
-  /**
-   * Deletes a file completely from physical storage and SQLite database.
-   * @param {string} fileId 
-   * @returns {Promise<boolean>}
-   */
   async deleteFile(fileId) {
-    const fileRecord = this.getFileRecord(fileId);
-    const storageProvider = getStorageProvider(fileRecord.storageProvider || 'local');
+    const fileRecord = await this.getFileRecord(fileId);
+    const storageProvider = getStorageProvider(fileRecord.storageProvider || 'cloudinary');
 
-    // Remove from disk / cloud storage
     await storageProvider.deleteFile(fileRecord);
-
-    // Hard delete from database
-    db.hardDeleteFile(fileId);
+    await db.hardDeleteFile(fileId);
     return true;
   }
 }

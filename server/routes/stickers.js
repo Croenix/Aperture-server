@@ -10,9 +10,6 @@ const { getBaseUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
 
-/**
- * Standard default sticker categories / subcategories
- */
 const DEFAULT_STICKER_CATEGORIES = [
   'Badges',
   'Emoji',
@@ -25,13 +22,11 @@ const DEFAULT_STICKER_CATEGORIES = [
   'Illustrations'
 ];
 
-// Ensure temporary upload directory exists
 const tempDir = path.resolve(config.uploadDirectory, '.tmp');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
 
-// Configure Multer storage for Stickers
 const uploadStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, tempDir);
@@ -59,9 +54,6 @@ const upload = multer({
   }
 });
 
-/**
- * Helper to map a database record to a clean Sticker response object.
- */
 function toCleanSticker(file, reqOrBase = null) {
   const base = getBaseUrl(reqOrBase);
   const subCategory = file.subCategory || file.sub_category || file.category || 'Badges';
@@ -84,16 +76,16 @@ function toCleanSticker(file, reqOrBase = null) {
     title: file.title || file.originalName,
     mainCategory: 'sticker',
     subCategory: subCategory,
-    category: subCategory, // sticker category
+    category: subCategory,
     format: format,
     stickerFormat: format,
     isPremium: isPrem,
     premium: isPrem ? 'Yes' : 'No',
     pricing: isPrem ? 'Paid' : 'Free',
-    stickerUrl: `${base}/files/${file.id}`,
-    fileUrl: `${base}/files/${file.id}`,
+    stickerUrl: file.directUrl || file.fileUrl || `${base}/files/${file.id}`,
+    fileUrl: file.directUrl || file.fileUrl || `${base}/files/${file.id}`,
     downloadUrl: `${base}/files/${file.id}/download`,
-    viewUrl: `${base}/files/${file.id}/view`,
+    viewUrl: file.directUrl || file.viewUrl || `${base}/files/${file.id}/view`,
     fileName: file.originalName || file.filename,
     mimeType: file.mimeType,
     fileSize: file.size,
@@ -102,13 +94,9 @@ function toCleanSticker(file, reqOrBase = null) {
   };
 }
 
-/**
- * GET /api/stickers/categories
- * Returns sticker categories list.
- */
-router.get('/categories', optionalAuth, (req, res, next) => {
+router.get('/categories', optionalAuth, async (req, res, next) => {
   try {
-    const dbCategories = fileService.listCategories();
+    const dbCategories = await fileService.listCategories();
     const dbStickerSubs = (dbCategories && dbCategories.hierarchy && dbCategories.hierarchy.sticker)
       ? dbCategories.hierarchy.sticker.map(x => x.subCategory).filter(Boolean)
       : [];
@@ -124,15 +112,6 @@ router.get('/categories', optionalAuth, (req, res, next) => {
   }
 });
 
-/**
- * POST /api/stickers or /api/v1/stickers
- * Upload a sticker file (SVG, PNG, etc.).
- * Form fields:
- * - 'file' or 'stickerFile' (File)
- * - 'name' or 'stickerName' or 'title' (String - Sticker Name)
- * - 'category' or 'subCategory' or 'stickerCategory' (String - Sticker Category e.g. Badges)
- * - 'isPremium' or 'premium' or 'pricing' (Boolean/String - 'Free' vs 'Paid' / 'Yes' vs 'No' / true vs false)
- */
 router.post(
   '/',
   optionalAuth,
@@ -212,16 +191,12 @@ router.post(
   }
 );
 
-/**
- * GET /api/stickers or /api/v1/stickers
- * Returns list of stickers, filterable by search, category, or pricing/isPremium.
- */
-router.get('/', optionalAuth, (req, res, next) => {
+router.get('/', optionalAuth, async (req, res, next) => {
   try {
     const category = req.query.category || req.query.subCategory || req.query.stickerCategory;
     const { search, isPremium, pricing, premium } = req.query;
 
-    const result = fileService.listFiles({
+    const result = await fileService.listFiles({
       page: 1,
       limit: 1000,
       search,
@@ -233,7 +208,6 @@ router.get('/', optionalAuth, (req, res, next) => {
 
     const stickers = result.files.map(f => toCleanSticker(f, req));
 
-    // Group by sticker category
     const catGrouped = {};
     stickers.forEach(s => {
       const cat = s.category || 'Badges';
@@ -254,25 +228,19 @@ router.get('/', optionalAuth, (req, res, next) => {
   }
 });
 
-/**
- * GET /api/stickers/:categoryOrId
- * Returns stickers for specific category or metadata by ID.
- */
-router.get('/:categoryOrId', optionalAuth, (req, res, next) => {
+router.get('/:categoryOrId', optionalAuth, async (req, res, next) => {
   try {
     const param = req.params.categoryOrId;
 
-    // Check if param is a file ID (e.g. f_...)
     if (param.startsWith('f_')) {
-      const fileData = fileService.getFileMetadata(param, req);
+      const fileData = await fileService.getFileMetadata(param, req);
       return res.json({
         success: true,
         sticker: toCleanSticker(fileData, req)
       });
     }
 
-    // Otherwise treat as category
-    const result = fileService.listFiles({
+    const result = await fileService.listFiles({
       page: 1,
       limit: 1000,
       mainCategory: 'sticker',
@@ -293,11 +261,7 @@ router.get('/:categoryOrId', optionalAuth, (req, res, next) => {
   }
 });
 
-/**
- * PATCH /api/stickers/:id or PUT /api/stickers/:id
- * Edit sticker details (name, category, pricing/isPremium).
- */
-const handleUpdateSticker = (req, res, next) => {
+const handleUpdateSticker = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, stickerName, title, category, subCategory, stickerCategory, isPremium, pricing, premium } = req.body;
@@ -312,7 +276,7 @@ const handleUpdateSticker = (req, res, next) => {
       }
     }
 
-    const updated = fileService.updateFile(id, {
+    const updated = await fileService.updateFile(id, {
       title: name || stickerName || title,
       mainCategory: 'sticker',
       subCategory: category || subCategory || stickerCategory,
@@ -333,10 +297,6 @@ const handleUpdateSticker = (req, res, next) => {
 router.patch('/:id', optionalAuth, handleUpdateSticker);
 router.put('/:id', optionalAuth, handleUpdateSticker);
 
-/**
- * DELETE /api/stickers/:id
- * Remove sticker file and database entry.
- */
 router.delete('/:id', optionalAuth, async (req, res, next) => {
   try {
     const { id } = req.params;

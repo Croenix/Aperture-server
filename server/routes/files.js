@@ -27,26 +27,20 @@ const uploadStorage = multer.diskStorage({
   }
 });
 
-// Multer file filter for security & extension checking
 const fileFilter = (req, file, cb) => {
   const ext = getSafeExtension(file.originalname);
-
-  // Block dangerous executable extensions
   if (config.blockedExtensions.includes(ext)) {
     const err = new Error(`File type '.${ext}' is blocked for security reasons.`);
     err.code = 'BLOCKED_FILE_TYPE';
     err.status = 400;
     return cb(err, false);
   }
-
-  // If allowedExtensions whitelist is specified, verify against it
   if (config.allowedExtensions.length > 0 && !config.allowedExtensions.includes(ext)) {
     const err = new Error(`File extension '.${ext}' is not permitted. Allowed: ${config.allowedExtensions.join(', ')}`);
     err.code = 'UNSUPPORTED_FILE_TYPE';
     err.status = 400;
     return cb(err, false);
   }
-
   cb(null, true);
 };
 
@@ -60,8 +54,6 @@ const upload = multer({
 
 /**
  * POST /api/v1/files
- * Upload a file. Requires 'files:upload' scope.
- * Accepts optional form fields: 'title' and 'category'.
  */
 router.post(
   '/',
@@ -80,7 +72,6 @@ router.post(
         });
       }
 
-      console.log('Upload req.body:', req.body);
       const fileData = await fileService.processUpload(
         req.file,
         {
@@ -102,7 +93,6 @@ router.post(
         file: fileData
       });
     } catch (err) {
-      // Clean up temp file if failed
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
         fs.promises.unlink(req.file.path).catch(() => {});
       }
@@ -113,15 +103,14 @@ router.post(
 
 /**
  * GET /api/v1/files/categories
- * Return list of all unique file categories. Requires 'files:read' scope.
  */
 router.get(
   '/categories',
   authenticateApiKey,
   requirePermission('files:read'),
-  (req, res, next) => {
+  async (req, res, next) => {
     try {
-      const categories = fileService.listCategories();
+      const categories = await fileService.listCategories();
       return res.json({
         success: true,
         categories
@@ -134,16 +123,15 @@ router.get(
 
 /**
  * GET /api/v1/files/category/:category
- * Return files for a specific category. Requires 'files:read' scope.
  */
 router.get(
   '/category/:category',
   authenticateApiKey,
   requirePermission('files:read'),
-  (req, res, next) => {
+  async (req, res, next) => {
     try {
       const { page, limit, search } = req.query;
-      const result = fileService.listFiles({
+      const result = await fileService.listFiles({
         page,
         limit,
         search,
@@ -163,16 +151,15 @@ router.get(
 
 /**
  * GET /api/v1/files
- * Return paginated list of uploaded files. Requires 'files:read' scope.
  */
 router.get(
   '/',
   authenticateApiKey,
   requirePermission('files:read'),
-  (req, res, next) => {
+  async (req, res, next) => {
     try {
-      const { page, limit, search, category } = req.query;
-      const result = fileService.listFiles({ page, limit, search, category }, req);
+      const { page, limit, search, category, mainCategory, subCategory, isPremium, pricing } = req.query;
+      const result = await fileService.listFiles({ page, limit, search, category, mainCategory, subCategory, isPremium, pricing }, req);
       return res.json({
         success: true,
         files: result.files,
@@ -186,15 +173,14 @@ router.get(
 
 /**
  * GET /api/v1/files/:id
- * Return file metadata. Requires 'files:read' scope.
  */
 router.get(
   '/:id',
   authenticateApiKey,
   requirePermission('files:read'),
-  (req, res, next) => {
+  async (req, res, next) => {
     try {
-      const fileData = fileService.getFileMetadata(req.params.id, req);
+      const fileData = await fileService.getFileMetadata(req.params.id, req);
       return res.json({
         success: true,
         file: fileData
@@ -206,22 +192,27 @@ router.get(
 );
 
 /**
- * Stream helper for downloading or viewing files with HTTP Range support.
+ * Stream helper for downloading or viewing files.
  */
 async function streamFileResponse(req, res, next, isDownload) {
   try {
     const fileId = req.params.id;
-    const fileRecord = fileService.getFileRecord(fileId);
+    const fileRecord = await fileService.getFileRecord(fileId);
+    
+    // If stored on Cloudinary with direct URL, redirect directly to Cloudinary CDN URL!
+    if (fileRecord.directUrl || (fileRecord.storageMetadata && fileRecord.storageMetadata.secureUrl)) {
+      const targetUrl = fileRecord.directUrl || fileRecord.storageMetadata.secureUrl;
+      return res.redirect(targetUrl);
+    }
+
     const disposition = isDownload ? 'attachment' : 'inline';
     const originalName = encodeURIComponent(fileRecord.originalName);
 
-    // Set standard headers
     res.setHeader('Content-Type', fileRecord.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `${disposition}; filename="${fileRecord.originalName}"; filename*=UTF-8''${originalName}`);
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
-    // Handle HTTP 206 Partial Content Range header (vital for video/audio streaming)
     const range = req.headers.range;
     const fileSize = fileRecord.size;
 
@@ -250,7 +241,6 @@ async function streamFileResponse(req, res, next, isDownload) {
       return stream.pipe(res);
     }
 
-    // Full file stream
     res.setHeader('Content-Length', fileSize);
     const { stream } = await fileService.getFileStream(fileId);
     stream.pipe(res);
@@ -259,37 +249,30 @@ async function streamFileResponse(req, res, next, isDownload) {
   }
 }
 
-/**
- * GET /api/v1/files/:id/download
- * Download the actual file.
- */
 router.get('/:id/download', (req, res, next) => {
   streamFileResponse(req, res, next, true);
 });
 
-/**
- * GET /api/v1/files/:id/view
- * View/stream the file inline when supported by MIME type.
- */
 router.get('/:id/view', (req, res, next) => {
   streamFileResponse(req, res, next, false);
 });
 
-/**
- * PATCH /api/v1/files/:id & PUT /api/v1/files/:id
- * Update file metadata (title, category). Requires 'files:upload' or 'files:manage' scope.
- */
-const handleUpdateFile = (req, res, next) => {
+const handleUpdateFile = async (req, res, next) => {
   try {
     const fileId = req.params.id;
-    const { title, mainCategory, subCategory, category } = req.body;
+    const { title, mainCategory, subCategory, category, isPremium, pricing, format, stickerFormat } = req.body;
 
-    const updated = fileService.updateFile(fileId, {
+    const updated = await fileService.updateFile(fileId, {
       title,
       mainCategory,
       subCategory: subCategory || category,
-      category: subCategory || category
+      category: subCategory || category,
+      isPremium,
+      pricing,
+      format,
+      stickerFormat
     }, req);
+
     return res.json({
       success: true,
       message: `File '${fileId}' updated successfully.`,
@@ -303,10 +286,6 @@ const handleUpdateFile = (req, res, next) => {
 router.patch('/:id', authenticateApiKey, requirePermission(['files:upload', 'files:manage']), handleUpdateFile);
 router.put('/:id', authenticateApiKey, requirePermission(['files:upload', 'files:manage']), handleUpdateFile);
 
-/**
- * DELETE /api/v1/files/:id
- * Delete a file. Requires 'files:delete' scope.
- */
 router.delete(
   '/:id',
   authenticateApiKey,

@@ -6,10 +6,9 @@ const db = require('../database');
  * 1. Authorization header: "Bearer <YOUR_API_KEY>"
  * 2. Header: "x-api-key: <YOUR_API_KEY>"
  */
-function authenticateApiKey(req, res, next) {
+async function authenticateApiKey(req, res, next) {
   let apiKey = null;
 
-  // Check Authorization header (Bearer token)
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     apiKey = authHeader.slice(7).trim();
@@ -27,7 +26,7 @@ function authenticateApiKey(req, res, next) {
     });
   }
 
-  const keyRecord = db.getApiKey(apiKey);
+  const keyRecord = await db.getApiKey(apiKey);
   if (!keyRecord || !keyRecord.isActive) {
     return res.status(401).json({
       success: false,
@@ -38,26 +37,17 @@ function authenticateApiKey(req, res, next) {
     });
   }
 
-  // Update key last used timestamp asynchronously
   try {
     db.updateApiKeyUsage(apiKey);
-  } catch (err) {
-    // Non-critical, do not block request
-  }
+  } catch (err) {}
 
-  // Attach key information to request
   req.apiKey = apiKey;
   req.apiKeyInfo = keyRecord;
 
   next();
 }
 
-/**
- * Optional authentication middleware.
- * If an API key is provided and valid, it attaches it to req.apiKeyInfo.
- * If no key is provided, request continues as unauthenticated.
- */
-function optionalAuth(req, res, next) {
+async function optionalAuth(req, res, next) {
   let apiKey = null;
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -67,7 +57,7 @@ function optionalAuth(req, res, next) {
   }
 
   if (apiKey) {
-    const keyRecord = db.getApiKey(apiKey);
+    const keyRecord = await db.getApiKey(apiKey);
     if (keyRecord && keyRecord.isActive) {
       req.apiKey = apiKey;
       req.apiKeyInfo = keyRecord;
