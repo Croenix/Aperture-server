@@ -28,24 +28,38 @@ Master Admin     aperture_adm_secret_key_2026     files:read, files:upload,
 Uploader         aperture_upl_secret_key_2026     files:read, files:upload
 Read-Only        aperture_ro_secret_key_2026      files:read
 --------------------------------------------------------------------------------
-* Public preset endpoints (GET /api/presets/*) and direct downloads (/files/*)
-  can be called with or without Authorization headers.
+* Public endpoints (GET /api/presets/*, /api/fonts/*, /api/stickers/*) and 
+  direct downloads (/files/*) can be called with or without Authorization headers.
 
 
 ================================================================================
-2. TWO-LEVEL PRESET SYSTEM OVERVIEW
+2. HIERARCHICAL CATEGORY & METADATA SYSTEM OVERVIEW
 ================================================================================
 
-1. MAIN CATEGORY:
-   - "image" (Image Presets)
-   - "text"  (Text Presets)
+1. MAIN CATEGORIES:
+   - "image"   (Image Presets / LUTs / Lightroom Profiles)
+   - "text"    (Text Presets / Captions / Quotes)
+   - "font"    (Typography & Custom Fonts)
+   - "sticker" (Graphics, Badges & Icons)
 
-2. SUB CATEGORY:
+2. SUB CATEGORIES:
    - Image Preset Defaults:
      "Vintage", "Modern", "Black & White", "Cinematic", "Portrait",
      "Landscape", "Moody", "Warm Tones", "Cool Tones", "Cyberpunk" + Custom
    - Text Preset Defaults:
-     Dynamic user-created subcategories (e.g., "Quotes", "Captions", "Lyrics")
+     "Quotes", "Captions", "Lyrics" + Custom
+   - Font Defaults:
+     "Normal" + Custom
+   - Sticker Defaults:
+     "Badges", "Emoji", "Decorative", "Icons", "Anime", "Logos", "Vectors", "Labels", "Illustrations" + Custom
+
+3. PRICING & ACCESS TYPES:
+   - "Free" (isPremium: false)
+   - "Paid" / "Premium" (isPremium: true)
+
+4. STICKER FORMATS:
+   - "PNG" (Raster image format with transparency)
+   - "SVG" (Scalable Vector Graphics format)
 
 
 ================================================================================
@@ -61,6 +75,8 @@ Endpoint:
 Optional Query Parameters:
   ?search=sunset
   ?subCategory=Vintage
+  ?pricing=Free (or ?pricing=Paid)
+  ?isPremium=false (or ?isPremium=true)
 
 cURL Example:
   curl -X GET "https://aperture-server.onrender.com/api/presets/image"
@@ -81,6 +97,9 @@ Sample JSON Response Feed:
       "mainCategory": "image",
       "subCategory": "Vintage",
       "category": "Vintage",
+      "isPremium": false,
+      "premium": "No",
+      "pricing": "Free",
       "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916",
       "downloadUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/download",
       "viewUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/view",
@@ -95,6 +114,9 @@ Sample JSON Response Feed:
       "mainCategory": "image",
       "subCategory": "Cinematic",
       "category": "Cinematic",
+      "isPremium": true,
+      "premium": "Yes",
+      "pricing": "Paid",
       "fileUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5",
       "downloadUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5/download",
       "viewUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5/view",
@@ -111,6 +133,8 @@ Sample JSON Response Feed:
         "title": "Amber Sunset LUT",
         "mainCategory": "image",
         "subCategory": "Vintage",
+        "isPremium": false,
+        "pricing": "Free",
         "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916"
       }
     ],
@@ -120,6 +144,8 @@ Sample JSON Response Feed:
         "title": "Moody Forest Glow",
         "mainCategory": "image",
         "subCategory": "Cinematic",
+        "isPremium": true,
+        "pricing": "Paid",
         "fileUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5"
       }
     ]
@@ -151,6 +177,9 @@ Sample JSON Response Feed:
       "mainCategory": "image",
       "subCategory": "Vintage",
       "category": "Vintage",
+      "isPremium": false,
+      "premium": "No",
+      "pricing": "Free",
       "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916",
       "downloadUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/download",
       "viewUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/view",
@@ -172,6 +201,7 @@ Endpoint:
 Optional Query Parameters:
   ?search=golden
   ?subCategory=Quotes
+  ?pricing=Free
 
 cURL Example:
   curl -X GET "https://aperture-server.onrender.com/api/presets/text"
@@ -191,6 +221,8 @@ Sample JSON Response Feed:
       "mainCategory": "text",
       "subCategory": "Quotes",
       "category": "Quotes",
+      "isPremium": false,
+      "pricing": "Free",
       "fileUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b",
       "downloadUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b/download",
       "viewUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b/view",
@@ -207,6 +239,8 @@ Sample JSON Response Feed:
         "title": "Golden Hour Caption",
         "mainCategory": "text",
         "subCategory": "Quotes",
+        "isPremium": false,
+        "pricing": "Free",
         "fileUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b"
       }
     ]
@@ -253,14 +287,29 @@ Sample JSON Response Feed:
       "Quotes",
       "Captions"
     ],
+    "font": [
+      "Normal"
+    ],
+    "sticker": [
+      "Badges",
+      "Emoji",
+      "Decorative",
+      "Icons",
+      "Anime",
+      "Vectors"
+    ],
     "all": {
       "raw": [
         { "main_category": "image", "sub_category": "Vintage", "count": 5 },
-        { "main_category": "text", "sub_category": "Quotes", "count": 2 }
+        { "main_category": "text", "sub_category": "Quotes", "count": 2 },
+        { "main_category": "font", "sub_category": "Normal", "count": 3 },
+        { "main_category": "sticker", "sub_category": "Badges", "count": 4 }
       ],
       "hierarchy": {
         "image": [{ "subCategory": "Vintage", "count": 5 }],
-        "text": [{ "subCategory": "Quotes", "count": 2 }]
+        "text": [{ "subCategory": "Quotes", "count": 2 }],
+        "font": [{ "subCategory": "Normal", "count": 3 }],
+        "sticker": [{ "subCategory": "Badges", "count": 4 }]
       }
     }
   }
@@ -286,6 +335,8 @@ Sample JSON Response Feed:
         "title": "Amber Sunset LUT",
         "mainCategory": "image",
         "subCategory": "Vintage",
+        "isPremium": false,
+        "pricing": "Free",
         "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916"
       }
     ],
@@ -295,6 +346,8 @@ Sample JSON Response Feed:
         "title": "Golden Hour Caption",
         "mainCategory": "text",
         "subCategory": "Quotes",
+        "isPremium": false,
+        "pricing": "Free",
         "fileUrl": "https://aperture-server.onrender.com/files/f_7b8c6e478d2b"
       }
     ]
@@ -303,7 +356,7 @@ Sample JSON Response Feed:
 
 
 --------------------------------------------------------------------------------
-3.7 EDIT PRESET (TITLE / CATEGORIES)
+3.7 EDIT PRESET (TITLE / CATEGORIES / PRICING / FORMAT)
 --------------------------------------------------------------------------------
 Endpoint:
   PATCH https://aperture-server.onrender.com/api/presets/:id
@@ -317,14 +370,16 @@ Request Body (JSON):
 {
   "title": "Vintage Sunset Glow",
   "mainCategory": "image",
-  "subCategory": "Vintage"
+  "subCategory": "Vintage",
+  "pricing": "Paid",
+  "isPremium": true
 }
 
 cURL Example:
   curl -X PATCH "https://aperture-server.onrender.com/api/presets/f_c11d0a6c3916" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer aperture_upl_secret_key_2026" \
-    -d '{"title": "Vintage Sunset Glow", "mainCategory": "image", "subCategory": "Vintage"}'
+    -d '{"title": "Vintage Sunset Glow", "mainCategory": "image", "subCategory": "Vintage", "pricing": "Paid", "isPremium": true}'
 
 Sample JSON Response Feed:
 {
@@ -336,6 +391,9 @@ Sample JSON Response Feed:
     "mainCategory": "image",
     "subCategory": "Vintage",
     "category": "Vintage",
+    "isPremium": true,
+    "premium": "Yes",
+    "pricing": "Paid",
     "fileUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916",
     "downloadUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/download",
     "viewUrl": "https://aperture-server.onrender.com/files/f_c11d0a6c3916/view",
@@ -369,7 +427,7 @@ Sample JSON Response Feed:
 ================================================================================
 
 --------------------------------------------------------------------------------
-4.1 UPLOAD PRESET FILE
+4.1 UPLOAD PRESET / FILE
 --------------------------------------------------------------------------------
 Endpoint:
   POST https://aperture-server.onrender.com/api/v1/files
@@ -381,8 +439,11 @@ Headers:
 Form-Data Parameters:
   - file (Required): Binary file (up to 100 MB)
   - title (Optional): Custom display title (e.g. "Amber Sunset")
-  - mainCategory (Optional): "image" or "text" (Default: "image")
-  - subCategory (Optional): Subcategory name (e.g. "Vintage", "Quotes")
+  - mainCategory (Optional): "image", "text", "font", or "sticker" (Default: "image")
+  - subCategory (Optional): Subcategory name (e.g. "Vintage", "Quotes", "Normal", "Badges")
+  - pricing (Optional): "Free" or "Paid" (Default: "Free")
+  - isPremium (Optional): "true" or "false" (Default: "false")
+  - format / stickerFormat (Optional): "PNG" or "SVG" (Applicable for stickers)
 
 cURL Example:
   curl -X POST "https://aperture-server.onrender.com/api/v1/files" \
@@ -390,7 +451,8 @@ cURL Example:
     -F "file=@/path/to/preset.dng" \
     -F "title=Amber Sunset" \
     -F "mainCategory=image" \
-    -F "subCategory=Vintage"
+    -F "subCategory=Vintage" \
+    -F "pricing=Free"
 
 Sample JSON Response Feed:
 {
@@ -401,6 +463,9 @@ Sample JSON Response Feed:
     "mainCategory": "image",
     "subCategory": "Vintage",
     "category": "Vintage",
+    "isPremium": false,
+    "premium": "No",
+    "pricing": "Free",
     "originalName": "preset.dng",
     "filename": "f_c11d0a6c3916.dng",
     "mimeType": "image/x-adobe-dng",
@@ -462,11 +527,13 @@ Query Parameters:
   - page (Default: 1)
   - limit (Default: 20, Max: 1000)
   - search (Optional text search)
-  - mainCategory (Optional: "image" or "text")
+  - mainCategory (Optional: "image", "text", "font", "sticker")
   - subCategory (Optional subcategory filter)
+  - pricing (Optional: "Free" or "Paid")
+  - isPremium (Optional: "true" or "false")
 
 cURL Example:
-  curl -X GET "https://aperture-server.onrender.com/api/v1/files?page=1&limit=20&mainCategory=image&subCategory=Vintage" \
+  curl -X GET "https://aperture-server.onrender.com/api/v1/files?page=1&limit=20&mainCategory=image&subCategory=Vintage&pricing=Free" \
     -H "Authorization: Bearer aperture_ro_secret_key_2026"
 
 
@@ -490,25 +557,35 @@ async function getImagePresets(subCategory = '') {
   return data.presets;
 }
 
-// 2. Fetch Text Presets
-async function getTextPresets(subCategory = '') {
-  const url = subCategory 
-    ? `https://aperture-server.onrender.com/api/presets/text/${encodeURIComponent(subCategory)}`
-    : 'https://aperture-server.onrender.com/api/presets/text';
-  
+// 2. Fetch Fonts
+async function getFonts(subCategory = 'Normal') {
+  const url = `https://aperture-server.onrender.com/api/fonts/${encodeURIComponent(subCategory)}`;
   const response = await fetch(url);
   const data = await response.json();
-  console.log('Text Presets:', data.presets);
-  return data.presets;
+  console.log('Fonts:', data.fonts);
+  return data.fonts;
 }
 
-// 3. Upload a Preset
-async function uploadPreset(fileObject, title, mainCategory, subCategory, apiKey) {
+// 3. Fetch Stickers (Filter by category & format)
+async function getStickers(category = 'Badges', format = 'SVG') {
+  const url = `https://aperture-server.onrender.com/api/stickers?category=${encodeURIComponent(category)}&format=${format}`;
+  const response = await fetch(url);
+  const data = await response.json();
+  console.log('Stickers:', data.stickers);
+  return data.stickers;
+}
+
+// 4. Upload a File / Preset / Sticker / Font
+async function uploadFile(fileObject, title, mainCategory, subCategory, pricing, format, apiKey) {
   const formData = new FormData();
   formData.append('file', fileObject);
   formData.append('title', title);
-  formData.append('mainCategory', mainCategory); // 'image' or 'text'
+  formData.append('mainCategory', mainCategory); // 'image', 'text', 'font', or 'sticker'
   formData.append('subCategory', subCategory);
+  formData.append('pricing', pricing); // 'Free' or 'Paid'
+  if (format) {
+    formData.append('format', format); // 'PNG' or 'SVG' (For stickers)
+  }
 
   const response = await fetch('https://aperture-server.onrender.com/api/v1/files', {
     method: 'POST',
@@ -531,16 +608,18 @@ import requests
 BASE_URL = "https://aperture-server.onrender.com"
 API_KEY = "aperture_upl_secret_key_2026"
 
-# 1. Fetch Image Presets
-response = requests.get(f"{BASE_URL}/api/presets/image")
-print("Image Presets:", response.json())
+# 1. Fetch Stickers
+response = requests.get(f"{BASE_URL}/api/stickers?format=SVG")
+print("SVG Stickers:", response.json())
 
-# 2. Upload an Image Preset
-files = {'file': open('sunset_preset.dng', 'rb')}
+# 2. Upload a Sticker (SVG Format)
+files = {'file': open('star_badge.svg', 'rb')}
 data = {
-    'title': 'Sunset Preset Gold',
-    'mainCategory': 'image',
-    'subCategory': 'Vintage'
+    'title': 'Golden Star Badge',
+    'mainCategory': 'sticker',
+    'subCategory': 'Badges',
+    'pricing': 'Free',
+    'format': 'SVG'
 }
 headers = {'Authorization': f'Bearer {API_KEY}'}
 
@@ -590,14 +669,16 @@ Headers:
 Multipart Form-Data Fields:
   - file (or fontFile): Font binary file (.ttf, .otf, .woff, .woff2, .eot)
   - name (or fontName / title): Display Name of the Font (e.g. "Roboto Bold", "Montserrat ExtraBold")
-  - category (or subCategory / fontType): Font subcategory: "Free" or "Paid"
+  - category (or subCategory / fontType): Font subcategory (Default: "Normal")
+  - pricing (or isPremium): Access type ("Free" or "Paid")
 
 cURL Example:
   curl -X POST "https://aperture-server.onrender.com/api/fonts" \
     -H "Authorization: Bearer aperture_upl_secret_key_2026" \
     -F "file=@/path/to/Roboto-Bold.ttf" \
     -F "name=Roboto Bold" \
-    -F "subCategory=Free"
+    -F "subCategory=Normal" \
+    -F "pricing=Free"
 
 Sample JSON Response:
 {
@@ -608,8 +689,11 @@ Sample JSON Response:
     "name": "Roboto Bold",
     "title": "Roboto Bold",
     "mainCategory": "font",
-    "subCategory": "Free",
-    "category": "Free",
+    "subCategory": "Normal",
+    "category": "Normal",
+    "isPremium": false,
+    "premium": "No",
+    "pricing": "Free",
     "fontUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5",
     "fileUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5",
     "downloadUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5/download",
@@ -628,12 +712,14 @@ Endpoint:
 
 Optional Query Parameters:
   ?search=Roboto
-  ?subCategory=Free
+  ?subCategory=Normal
+  ?pricing=Free (or ?pricing=Paid)
+  ?isPremium=false
 
 cURL Example:
   curl -X GET "https://aperture-server.onrender.com/api/fonts"
-# Filter by Free fonts:
-  curl -X GET "https://aperture-server.onrender.com/api/fonts/Free"
+# Filter by Normal fonts:
+  curl -X GET "https://aperture-server.onrender.com/api/fonts/Normal"
 
 7.3 GET FONT CATEGORIES
 --------------------------------------------------------------------------------
@@ -660,13 +746,17 @@ Multipart Form-Data Fields:
   - file (or stickerFile): Sticker image file (.svg, .png, .webp, .jpg)
   - name (or stickerName / title): Display Name of the Sticker (e.g. "Golden Star Badge", "Verified Icon")
   - category (or subCategory / stickerCategory): Sticker category (e.g. "Badges", "Emoji", "Decorative", "Icons", "Anime", "Vectors")
+  - pricing (or isPremium): Access type ("Free" or "Paid")
+  - format (or stickerFormat): Sticker format ("PNG" or "SVG")
 
 cURL Example:
   curl -X POST "https://aperture-server.onrender.com/api/stickers" \
     -H "Authorization: Bearer aperture_upl_secret_key_2026" \
     -F "file=@/path/to/golden_star.svg" \
     -F "name=Golden Star Badge" \
-    -F "category=Badges"
+    -F "category=Badges" \
+    -F "pricing=Free" \
+    -F "format=SVG"
 
 Sample JSON Response:
 {
@@ -679,6 +769,11 @@ Sample JSON Response:
     "mainCategory": "sticker",
     "subCategory": "Badges",
     "category": "Badges",
+    "format": "SVG",
+    "stickerFormat": "SVG",
+    "isPremium": false,
+    "premium": "No",
+    "pricing": "Free",
     "stickerUrl": "https://aperture-server.onrender.com/files/f_7b6a5c4d3e2f",
     "fileUrl": "https://aperture-server.onrender.com/files/f_7b6a5c4d3e2f",
     "downloadUrl": "https://aperture-server.onrender.com/files/f_7b6a5c4d3e2f/download",
@@ -699,9 +794,13 @@ Endpoint:
 Optional Query Parameters:
   ?search=Star
   ?category=Badges
+  ?pricing=Free (or ?pricing=Paid)
+  ?format=SVG (or ?format=PNG)
 
 cURL Example:
   curl -X GET "https://aperture-server.onrender.com/api/stickers"
+# Filter by SVG Stickers:
+  curl -X GET "https://aperture-server.onrender.com/api/stickers?format=SVG"
 
 8.3 GET STICKER CATEGORIES
 --------------------------------------------------------------------------------
