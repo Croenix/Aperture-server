@@ -2,7 +2,7 @@ const path = require('path');
 const config = require('../config');
 const db = require('../database');
 const { getStorageProvider } = require('./storageService');
-const { generateFileId, isValidFileId, sanitizeOriginalFilename, formatTitle } = require('../utils/fileId');
+const { generateFileId, isValidFileId, sanitizeOriginalFilename, formatTitle, deriveFontFamily } = require('../utils/fileId');
 const { getBaseUrl } = require('../utils/urlHelper');
 
 class FileService {
@@ -26,9 +26,12 @@ class FileService {
     const directCloudinaryUrl = record.directUrl || record.direct_url || (record.storageMetadata && record.storageMetadata.secureUrl) || null;
     const formattedTitle = formatTitle(record.title || record.originalName, record.originalName);
 
+    const fontFamily = record.fontFamily || record.font_family || (mainCategory === 'font' ? deriveFontFamily(formattedTitle, record.originalName) : null);
+
     return {
       id: record.id,
       title: formattedTitle,
+      fontFamily: fontFamily,
       mainCategory,
       subCategory,
       category: subCategory,
@@ -74,6 +77,11 @@ class FileService {
       ? (metadata.subCategory || metadata.category).trim()
       : 'general';
 
+    const rawFontFamily = metadata ? (metadata.fontFamily || metadata.font_family || metadata.family) : null;
+    const fontFamily = (mainCategory === 'font' || rawFontFamily)
+      ? deriveFontFamily(customTitle, originalName, rawFontFamily)
+      : null;
+
     // Save physical asset via Cloudinary
     const saveResult = await storageProvider.saveFile({
       fileId,
@@ -89,6 +97,7 @@ class FileService {
       originalName,
       filename: saveResult.storageFilename,
       title: customTitle,
+      fontFamily,
       mainCategory,
       subCategory,
       isPremium: metadata.isPremium || metadata.is_premium || metadata.pricing === 'Paid' || metadata.pricing === 'paid' || metadata.premium === 'Yes' || metadata.premium === 'yes' || metadata.premium === true,

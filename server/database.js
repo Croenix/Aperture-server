@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const logger = require('./utils/logger');
-const { formatTitle } = require('./utils/fileId');
+const { formatTitle, deriveFontFamily } = require('./utils/fileId');
 
 // Initialize Mongoose Schema for MongoDB Atlas
 const fileSchema = new mongoose.Schema({
@@ -12,6 +12,7 @@ const fileSchema = new mongoose.Schema({
   originalName: { type: String, required: true },
   filename: { type: String, required: true },
   title: { type: String },
+  fontFamily: { type: String, index: true },
   mainCategory: { type: String, default: 'image', index: true },
   subCategory: { type: String, default: 'general', index: true },
   category: { type: String, default: 'general', index: true },
@@ -77,6 +78,7 @@ function initSqliteSchema() {
       original_name TEXT NOT NULL,
       filename TEXT NOT NULL,
       title TEXT,
+      font_family TEXT,
       main_category TEXT NOT NULL DEFAULT 'image',
       sub_category TEXT NOT NULL DEFAULT 'general',
       category TEXT NOT NULL DEFAULT 'general',
@@ -107,6 +109,7 @@ function initSqliteSchema() {
   const existingColumns = db.prepare(`PRAGMA table_info(files)`).all().map(c => c.name);
   const requiredColumns = [
     { name: 'title', type: 'TEXT' },
+    { name: 'font_family', type: 'TEXT' },
     { name: 'main_category', type: "TEXT NOT NULL DEFAULT 'image'" },
     { name: 'sub_category', type: "TEXT NOT NULL DEFAULT 'general'" },
     { name: 'category', type: "TEXT NOT NULL DEFAULT 'general'" },
@@ -180,6 +183,7 @@ async function syncSqliteToMongo() {
           originalName: r.original_name,
           filename: r.filename,
           title: r.title || r.original_name,
+          fontFamily: r.font_family || (r.main_category === 'font' ? deriveFontFamily(r.title || r.original_name, r.original_name) : null),
           mainCategory: r.main_category || 'image',
           subCategory: r.sub_category || r.category || 'general',
           category: r.sub_category || r.category || 'general',
@@ -224,12 +228,14 @@ function _mapRecord(docOrRow) {
 
   const origName = data.originalName || data.original_name;
   const cleanTitle = formatTitle(data.title || origName, origName);
+  const fontFamily = data.fontFamily || data.font_family || (mainCategory === 'font' ? deriveFontFamily(cleanTitle, origName) : null);
 
   return {
     id: data.id,
     originalName: origName,
     filename: data.filename,
     title: cleanTitle,
+    fontFamily: fontFamily,
     mainCategory,
     subCategory,
     category: subCategory,
@@ -261,12 +267,14 @@ const dbOperations = {
 
     const isPrem = Boolean(fileRecord.isPremium || fileRecord.is_premium || fileRecord.pricing === 'Paid' || fileRecord.pricing === 'paid');
     const titleVal = formatTitle(fileRecord.title || fileRecord.originalName, fileRecord.originalName);
+    const fontFamilyVal = fileRecord.fontFamily || fileRecord.font_family || (mainCategory === 'font' ? deriveFontFamily(titleVal, fileRecord.originalName, fileRecord.fontFamily || fileRecord.font_family) : null);
 
     const recordData = {
       id: fileRecord.id,
       originalName: fileRecord.originalName,
       filename: fileRecord.filename,
       title: titleVal,
+      fontFamily: fontFamilyVal,
       mainCategory,
       subCategory,
       category: subCategory,
@@ -293,11 +301,11 @@ const dbOperations = {
 
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO files (
-        id, original_name, filename, title, main_category, sub_category, category, format, mime_type, size,
+        id, original_name, filename, title, font_family, main_category, sub_category, category, format, mime_type, size,
         storage_provider, storage_path, direct_url, storage_metadata, is_premium,
         uploaded_at, created_by, is_deleted
       ) VALUES (
-        @id, @originalName, @filename, @title, @mainCategory, @subCategory, @category, @format, @mimeType, @size,
+        @id, @originalName, @filename, @title, @fontFamily, @mainCategory, @subCategory, @category, @format, @mimeType, @size,
         @storageProvider, @storagePath, @directUrl, @storageMetadata, @isPremium,
         @uploadedAt, @createdBy, 0
       )
@@ -492,10 +500,29 @@ const dbOperations = {
     const params = [];
     const mongoUpdates = {};
 
+    const targetFontFamily = updates.fontFamily || updates.font_family || updates.family;
+    if (targetFontFamily !== undefined && typeof targetFontFamily === 'string' && targetFontFamily.trim()) {
+      const formattedFamily = formatTitle(targetFontFamily.trim(), '');
+      fields.push('font_family = ?');
+      params.push(formattedFamily);
+      mongoUpdates.fontFamily = formattedFamily;
+    }
+
     if (updates.title !== undefined && typeof updates.title === 'string' && updates.title.trim()) {
       fields.push('title = ?');
       params.push(updates.title.trim());
       mongoUpdates.title = updates.title.trim();
+      
+      // Auto-rederive fontFamily if title updated and fontFamily not explicitly given
+      if (!targetFontFamily) {
+        const existing = await this.getFileById(id);
+        if (existing && existing.mainCategory === 'font') {
+          const reDerived = deriveFontFamily(updates.title.trim(), existing.originalName);
+          fields.push('font_family = ?');
+          params.push(reDerived);
+          mongoUpdates.fontFamily = reDerived;
+        }
+      }
     }
 
     if (updates.mainCategory !== undefined && typeof updates.mainCategory === 'string' && updates.mainCategory.trim()) {

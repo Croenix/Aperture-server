@@ -108,11 +108,40 @@ function formatTitle(rawTitle, originalName = '') {
     .trim();
 }
 
+/**
+ * Automatically extracts or normalizes base Font Family name from a font title or filename.
+ * Strips weight/style suffixes (e.g. Bold, Italic, Extra Bold, Regular, etc.)
+ * @param {string} rawTitle 
+ * @param {string} [originalName] 
+ * @param {string} [explicitFontFamily] 
+ * @returns {string}
+ */
+function deriveFontFamily(rawTitle, originalName = '', explicitFontFamily = '') {
+  if (explicitFontFamily && typeof explicitFontFamily === 'string' && explicitFontFamily.trim()) {
+    return formatTitle(explicitFontFamily.trim(), '');
+  }
+
+  const title = formatTitle(rawTitle || originalName, originalName);
+  if (!title || title === 'unnamed') return 'General';
+
+  const stylePattern = /\b(extra\s*bold\s*italic|ultra\s*bold\s*italic|semi\s*bold\s*italic|demi\s*bold\s*italic|bold\s*italic|extra\s*light\s*italic|light\s*italic|thin\s*italic|medium\s*italic|black\s*italic|heavy\s*italic|condensed\s*bold|condensed\s*italic|extra\s*bold|ultra\s*bold|semi\s*bold|demi\s*bold|extra\s*light|ultra\s*light|bold|italic|oblique|regular|light|thin|medium|black|heavy|extrabold|ultrabold|semibold|demibold|extralight|ultralight|bolditalic|condensed|expanded|narrow|book|display)\b/gi;
+
+  let cleaned = title.replace(stylePattern, '').replace(/\s+/g, ' ').trim();
+
+  if (!cleaned) {
+    return title;
+  }
+
+  return cleaned;
+}
+
 module.exports = {
   generateFileId,
   isValidFileId,
   sanitizeOriginalFilename,
   getSafeExtension,
-  formatTitle
+  formatTitle,
+  deriveFontFamily
 };
+
 

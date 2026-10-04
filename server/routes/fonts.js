@@ -6,7 +6,7 @@ const config = require('../config');
 const fileService = require('../services/fileService');
 const { optionalAuth, authenticateApiKey } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
-const { getSafeExtension, formatTitle } = require('../utils/fileId');
+const { getSafeExtension, formatTitle, deriveFontFamily } = require('../utils/fileId');
 const { getBaseUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
@@ -51,11 +51,13 @@ function toCleanFont(file, reqOrBase = null) {
   const base = getBaseUrl(reqOrBase);
   const subCategory = file.subCategory || file.sub_category || file.category || 'Normal';
   const fontTitle = formatTitle(file.title || file.originalName, file.originalName);
+  const fontFamily = file.fontFamily || file.font_family || deriveFontFamily(fontTitle, file.originalName, file.fontFamily || file.font_family);
 
   return {
     id: file.id,
     name: fontTitle,
     title: fontTitle,
+    fontFamily: fontFamily,
     mainCategory: 'font',
     subCategory: subCategory,
     category: subCategory,
@@ -107,6 +109,7 @@ router.post(
       }
 
       const subCategory = req.body.subCategory || req.body.category || req.body.fontStyle || 'Normal';
+      const userFontFamily = req.body.fontFamily || req.body.font_family || req.body.family || '';
       const cleanFonts = [];
 
       for (const fontFile of fontFiles) {
@@ -118,6 +121,7 @@ router.post(
           fontFile,
           {
             title: formatTitle(rawName, fontFile.originalname),
+            fontFamily: userFontFamily,
             mainCategory: 'font',
             subCategory: subCategory
           },
@@ -150,10 +154,69 @@ router.post(
   }
 );
 
+router.get('/families', optionalAuth, async (req, res, next) => {
+  try {
+    const result = await fileService.listFiles({
+      page: 1,
+      limit: 1000,
+      mainCategory: 'font'
+    }, req);
+
+    const fonts = result.files.map(f => toCleanFont(f, req));
+    const familyMap = {};
+
+    fonts.forEach(f => {
+      const fam = f.fontFamily || deriveFontFamily(f.name, f.fileName) || 'General';
+      if (!familyMap[fam]) {
+        familyMap[fam] = {
+          fontFamily: fam,
+          name: fam,
+          count: 0,
+          fonts: []
+        };
+      }
+      familyMap[fam].fonts.push(f);
+      familyMap[fam].count++;
+    });
+
+    return res.json({
+      success: true,
+      count: Object.keys(familyMap).length,
+      fontFamilies: Object.values(familyMap),
+      groupedByFamily: familyMap
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/family/:familyName', optionalAuth, async (req, res, next) => {
+  try {
+    const familyName = req.params.familyName;
+    const result = await fileService.listFiles({
+      page: 1,
+      limit: 1000,
+      mainCategory: 'font'
+    }, req);
+
+    const fonts = result.files.map(f => toCleanFont(f, req));
+    const matching = fonts.filter(f => (f.fontFamily || '').toLowerCase() === familyName.toLowerCase());
+
+    return res.json({
+      success: true,
+      fontFamily: familyName,
+      count: matching.length,
+      fonts: matching
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/', optionalAuth, async (req, res, next) => {
   try {
     const subCategory = req.query.subCategory || req.query.category || req.query.fontStyle;
-    const { search } = req.query;
+    const { search, fontFamily: reqFamily } = req.query;
 
     const result = await fileService.listFiles({
       page: 1,
@@ -163,20 +226,43 @@ router.get('/', optionalAuth, async (req, res, next) => {
       subCategory: subCategory || ''
     }, req);
 
-    const fonts = result.files.map(f => toCleanFont(f, req));
+    let fonts = result.files.map(f => toCleanFont(f, req));
+
+    if (reqFamily) {
+      fonts = fonts.filter(f => (f.fontFamily || '').toLowerCase() === reqFamily.toLowerCase());
+    }
 
     const subGrouped = {};
+    const familyMap = {};
+
     fonts.forEach(f => {
-      const sub = f.subCategory || 'Sans-Serif';
+      const sub = f.subCategory || 'Normal';
       if (!subGrouped[sub]) subGrouped[sub] = [];
       subGrouped[sub].push(f);
+
+      const fam = f.fontFamily || deriveFontFamily(f.name, f.fileName) || 'General';
+      if (!familyMap[fam]) {
+        familyMap[fam] = {
+          fontFamily: fam,
+          name: fam,
+          count: 0,
+          fonts: []
+        };
+      }
+      familyMap[fam].fonts.push(f);
+      familyMap[fam].count++;
     });
+
+    const fontFamilies = Object.values(familyMap);
 
     return res.json({
       success: true,
       mainCategory: 'font',
       count: fonts.length,
+      fontFamilyCount: fontFamilies.length,
       subCategories: Object.keys(subGrouped),
+      fontFamilies: fontFamilies,
+      groupedByFamily: familyMap,
       fonts: fonts,
       grouped: subGrouped
     });
@@ -221,9 +307,10 @@ router.get('/:subCategoryOrId', optionalAuth, async (req, res, next) => {
 const handleUpdateFont = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, fontName, title, subCategory, category } = req.body;
+    const { name, fontName, title, subCategory, category, fontFamily, font_family, family } = req.body;
     const updated = await fileService.updateFile(id, {
       title: name || fontName || title,
+      fontFamily: fontFamily || font_family || family,
       mainCategory: 'font',
       subCategory: subCategory || category
     }, req);
@@ -255,3 +342,4 @@ router.delete('/:id', optionalAuth, async (req, res, next) => {
 });
 
 module.exports = router;
+

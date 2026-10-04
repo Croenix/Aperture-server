@@ -80,6 +80,7 @@ router.post(
           fileItem,
           {
             title: req.body.title,
+            fontFamily: req.body.fontFamily || req.body.font_family || req.body.family,
             mainCategory: req.body.mainCategory || req.body.main_category,
             subCategory: req.body.subCategory || req.body.sub_category || req.body.category,
             category: req.body.subCategory || req.body.sub_category || req.body.category,
@@ -270,10 +271,11 @@ router.get('/:id/view', (req, res, next) => {
 const handleUpdateFile = async (req, res, next) => {
   try {
     const fileId = req.params.id;
-    const { title, mainCategory, subCategory, category, isPremium, pricing, format, stickerFormat } = req.body;
+    const { title, fontFamily, font_family, family, mainCategory, subCategory, category, isPremium, pricing, format, stickerFormat } = req.body;
 
     const updated = await fileService.updateFile(fileId, {
       title,
+      fontFamily: fontFamily || font_family || family,
       mainCategory,
       subCategory: subCategory || category,
       category: subCategory || category,

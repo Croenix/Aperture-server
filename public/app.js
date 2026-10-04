@@ -68,6 +68,8 @@
     uploadPricingSelect: document.getElementById('upload-pricing-select'),
     stickerFormatOptionGroup: document.getElementById('sticker-format-option-group'),
     uploadFormatSelect: document.getElementById('upload-format-select'),
+    fontFamilyOptionGroup: document.getElementById('font-family-option-group'),
+    uploadFontFamilyInput: document.getElementById('upload-font-family-input'),
     toggleCatImage: document.getElementById('toggle-cat-image'),
     toggleCatText: document.getElementById('toggle-cat-text'),
     toggleCatFont: document.getElementById('toggle-cat-font'),
@@ -147,6 +149,8 @@
     editFilePricingSelect: document.getElementById('edit-file-pricing-select'),
     editFileFormatGroup: document.getElementById('edit-file-format-group'),
     editFileFormatSelect: document.getElementById('edit-file-format-select'),
+    editFileFontFamilyGroup: document.getElementById('edit-file-font-family-group'),
+    editFileFontFamilyInput: document.getElementById('edit-file-font-family-input'),
 
     // Status Indicator Pills
     mongoStatusPill: document.getElementById('mongo-status-pill'),
@@ -371,6 +375,14 @@
       }
     }
 
+    if (elements.fontFamilyOptionGroup) {
+      if (mainCategory === 'font') {
+        elements.fontFamilyOptionGroup.classList.remove('hidden');
+      } else {
+        elements.fontFamilyOptionGroup.classList.add('hidden');
+      }
+    }
+
     populateSubcategorySelect(elements.customSubcategorySelect, elements.customSubcategoryInput, mainCategory);
   }
 
@@ -540,6 +552,7 @@
 
       const pricingVal = elements.uploadPricingSelect ? elements.uploadPricingSelect.value : 'Free';
       const formatVal = elements.uploadFormatSelect ? elements.uploadFormatSelect.value : 'PNG';
+      const fontFamilyVal = elements.uploadFontFamilyInput ? elements.uploadFontFamilyInput.value.trim() : '';
 
       const formData = new FormData();
       formData.append('file', currentFile);
@@ -551,6 +564,9 @@
       formData.append('isPremium', pricingVal === 'Paid' ? 'true' : 'false');
       formData.append('format', formatVal);
       formData.append('stickerFormat', formatVal);
+      if (fontFamilyVal) {
+        formData.append('fontFamily', fontFamilyVal);
+      }
 
       const xhr = new XMLHttpRequest();
       state.activeXhr = xhr;
@@ -870,93 +886,135 @@
     renderFilesTable(files);
   }
 
-  // Render Grid View
+  // Helper to create card DOM element
+  function createGridCardElement(file) {
+    const card = document.createElement('div');
+    card.className = 'preset-card';
+
+    const mainCat = (file.mainCategory || 'image').toLowerCase();
+    const subCategory = file.subCategory || file.category || 'General';
+    const pricing = file.pricing || (file.isPremium ? 'Paid' : 'Free');
+    const format = file.format || file.stickerFormat || (file.mimeType && file.mimeType.includes('svg') ? 'SVG' : 'PNG');
+    const fontFamily = file.fontFamily || '';
+
+    let iconClass = 'icon-image';
+    let svgIcon = '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline>';
+    if (mainCat === 'text') {
+      iconClass = 'icon-text';
+      svgIcon = '<polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>';
+    } else if (mainCat === 'font') {
+      iconClass = 'icon-font';
+      svgIcon = '<path d="M4 7V4h16v3"></path><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>';
+    } else if (mainCat === 'sticker') {
+      iconClass = 'icon-sticker';
+      svgIcon = '<circle cx="12" cy="12" r="10"></circle><polygon points="12 8 15 15 9 15"></polygon>';
+    }
+
+    const mainBadge = getMainCategoryBadge(file.mainCategory);
+    const pricingBadge = (pricing === 'Paid' || pricing === 'paid' || file.isPremium)
+      ? `<span class="badge badge-pricing-paid">Premium</span>`
+      : `<span class="badge badge-pricing-free">Free</span>`;
+    const formatBadge = (mainCat === 'sticker') ? `<span class="badge badge-format">${escapeHtml(format)}</span>` : '';
+    const familyBadge = (fontFamily) ? `<span class="badge badge-subtle" style="border-color: rgba(99, 102, 241, 0.35); color: #a5b4fc;" title="Font Family">Family: ${escapeHtml(fontFamily)}</span>` : '';
+
+    card.innerHTML = `
+      <div class="preset-card-header">
+        <div class="preset-card-icon ${iconClass}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${svgIcon}</svg>
+        </div>
+        <div class="preset-card-badges">
+          ${mainBadge}
+          ${pricingBadge}
+        </div>
+      </div>
+
+      <div class="preset-card-body">
+        <h4 class="preset-card-title" title="${escapeHtml(file.title || file.originalName)}">${escapeHtml(file.title || file.originalName)}</h4>
+        <p class="preset-card-rawname">${escapeHtml(file.originalName)}</p>
+      </div>
+
+      <div class="preset-card-meta">
+        <span class="badge badge-subcategory">${escapeHtml(subCategory)}</span>
+        ${familyBadge}
+        ${formatBadge}
+        <span class="preset-card-id">${escapeHtml(file.id)}</span>
+        <span class="font-mono">${formatBytes(file.size)}</span>
+      </div>
+
+      <div class="preset-card-actions">
+        <button class="btn btn-glass btn-sm action-edit-btn" 
+          data-id="${escapeHtml(file.id)}" 
+          data-title="${escapeHtml(file.title || file.originalName)}" 
+          data-family="${escapeHtml(fontFamily)}"
+          data-main="${escapeHtml(file.mainCategory || 'image')}"
+          data-sub="${escapeHtml(subCategory)}" 
+          data-pricing="${escapeHtml(pricing)}"
+          data-format="${escapeHtml(format)}"
+          title="Edit Details">
+          <svg class="icon-sm text-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+          Edit
+        </button>
+        <a href="${file.url}/view" target="_blank" class="btn btn-glass btn-sm" title="View / Stream">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </a>
+        <a href="${file.url}/download" class="btn btn-glass btn-sm" title="Download">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        </a>
+        <button class="btn btn-glass btn-sm action-copy-btn" data-copy="${escapeHtml(file.fileUrl || file.url)}" title="Copy Link">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+        <button class="btn btn-glass btn-sm action-delete-btn" data-id="${escapeHtml(file.id)}" title="Delete">
+          <svg class="icon-sm text-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        </button>
+      </div>
+    `;
+
+    return card;
+  }
+
+  // Render Grid View (with Font Family Sub-folder grouping when fonts selected)
   function renderGridCards(files) {
     elements.filesGridBody.innerHTML = '';
 
-    files.forEach(file => {
-      const card = document.createElement('div');
-      card.className = 'preset-card';
+    const fontFiles = files.filter(f => (f.mainCategory || '').toLowerCase() === 'font' || f.fontFamily);
+    const isFontMode = state.selectedMainFilter === 'font' || (fontFiles.length > 0 && fontFiles.length === files.length);
 
-      const mainCat = (file.mainCategory || 'image').toLowerCase();
-      const subCategory = file.subCategory || file.category || 'General';
-      const pricing = file.pricing || (file.isPremium ? 'Paid' : 'Free');
-      const format = file.format || file.stickerFormat || (file.mimeType && file.mimeType.includes('svg') ? 'SVG' : 'PNG');
+    if (isFontMode) {
+      const familyGroups = {};
+      files.forEach(f => {
+        const fam = f.fontFamily || 'General';
+        if (!familyGroups[fam]) familyGroups[fam] = [];
+        familyGroups[fam].push(f);
+      });
 
-      let iconClass = 'icon-image';
-      let svgIcon = '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline>';
-      if (mainCat === 'text') {
-        iconClass = 'icon-text';
-        svgIcon = '<polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>';
-      } else if (mainCat === 'font') {
-        iconClass = 'icon-font';
-        svgIcon = '<path d="M4 7V4h16v3"></path><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>';
-      } else if (mainCat === 'sticker') {
-        iconClass = 'icon-sticker';
-        svgIcon = '<circle cx="12" cy="12" r="10"></circle><polygon points="12 8 15 15 9 15"></polygon>';
-      }
-
-      const mainBadge = getMainCategoryBadge(file.mainCategory);
-      const pricingBadge = (pricing === 'Paid' || pricing === 'paid' || file.isPremium)
-        ? `<span class="badge badge-pricing-paid">Premium</span>`
-        : `<span class="badge badge-pricing-free">Free</span>`;
-      const formatBadge = (mainCat === 'sticker') ? `<span class="badge badge-format">${escapeHtml(format)}</span>` : '';
-
-      card.innerHTML = `
-        <div class="preset-card-header">
-          <div class="preset-card-icon ${iconClass}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${svgIcon}</svg>
+      Object.keys(familyGroups).sort().forEach(familyName => {
+        const groupHeader = document.createElement('div');
+        groupHeader.style.cssText = 'grid-column: 1 / -1; margin-top: 1rem; margin-bottom: 0.4rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(99, 102, 241, 0.25); padding-bottom: 0.4rem;';
+        groupHeader.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; background: rgba(99, 102, 241, 0.2); color: #818cf8;">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            </span>
+            <h3 style="font-size: 1.05rem; font-weight: 700; color: #f8fafc; margin: 0;">📁 Font Family: ${escapeHtml(familyName)}</h3>
           </div>
-          <div class="preset-card-badges">
-            ${mainBadge}
-            ${pricingBadge}
-          </div>
-        </div>
+          <span class="badge badge-counter">${familyGroups[familyName].length} style variant${familyGroups[familyName].length > 1 ? 's' : ''}</span>
+        `;
+        elements.filesGridBody.appendChild(groupHeader);
 
-        <div class="preset-card-body">
-          <h4 class="preset-card-title" title="${escapeHtml(file.title || file.originalName)}">${escapeHtml(file.title || file.originalName)}</h4>
-          <p class="preset-card-rawname">${escapeHtml(file.originalName)}</p>
-        </div>
-
-        <div class="preset-card-meta">
-          <span class="badge badge-subcategory">${escapeHtml(subCategory)}</span>
-          ${formatBadge}
-          <span class="preset-card-id">${escapeHtml(file.id)}</span>
-          <span class="font-mono">${formatBytes(file.size)}</span>
-        </div>
-
-        <div class="preset-card-actions">
-          <button class="btn btn-glass btn-sm action-edit-btn" 
-            data-id="${escapeHtml(file.id)}" 
-            data-title="${escapeHtml(file.title || file.originalName)}" 
-            data-main="${escapeHtml(file.mainCategory || 'image')}"
-            data-sub="${escapeHtml(subCategory)}" 
-            data-pricing="${escapeHtml(pricing)}"
-            data-format="${escapeHtml(format)}"
-            title="Edit Details">
-            <svg class="icon-sm text-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-            Edit
-          </button>
-          <a href="${file.url}/view" target="_blank" class="btn btn-glass btn-sm" title="View / Stream">
-            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-          </a>
-          <a href="${file.url}/download" class="btn btn-glass btn-sm" title="Download">
-            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          </a>
-          <button class="btn btn-glass btn-sm action-copy-btn" data-copy="${escapeHtml(file.fileUrl || file.url)}" title="Copy Link">
-            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-          </button>
-          <button class="btn btn-glass btn-sm action-delete-btn" data-id="${escapeHtml(file.id)}" title="Delete">
-            <svg class="icon-sm text-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-          </button>
-        </div>
-      `;
-
-      elements.filesGridBody.appendChild(card);
-    });
+        familyGroups[familyName].forEach(file => {
+          const card = createGridCardElement(file);
+          elements.filesGridBody.appendChild(card);
+        });
+      });
+    } else {
+      files.forEach(file => {
+        const card = createGridCardElement(file);
+        elements.filesGridBody.appendChild(card);
+      });
+    }
 
     bindActionButtons();
   }
@@ -970,8 +1028,12 @@
       const subCategory = file.subCategory || file.category || 'General';
       const pricing = file.pricing || (file.isPremium ? 'Paid' : 'Free');
       const format = file.format || file.stickerFormat || (file.mimeType && file.mimeType.includes('svg') ? 'SVG' : 'PNG');
+      const fontFamily = file.fontFamily || '';
       const formatBadge = (file.mainCategory === 'sticker')
         ? `<span class="badge badge-format">${escapeHtml(format)}</span>`
+        : '';
+      const familyBadge = (fontFamily)
+        ? `<span class="badge badge-subtle" style="border-color: rgba(99, 102, 241, 0.35); color: #a5b4fc;">Family: ${escapeHtml(fontFamily)}</span>`
         : '';
       const pricingBadge = (pricing === 'Paid' || pricing === 'paid' || file.isPremium)
         ? `<span class="badge badge-pricing-paid">Premium</span>`
@@ -993,6 +1055,7 @@
         <td>${mainBadge}</td>
         <td>
           <span class="badge badge-subcategory">${escapeHtml(subCategory)}</span>
+          ${familyBadge}
           ${formatBadge}
           ${pricingBadge}
         </td>
@@ -1004,6 +1067,7 @@
             <button class="btn btn-glass btn-sm action-edit-btn" 
               data-id="${escapeHtml(file.id)}" 
               data-title="${escapeHtml(file.title || file.originalName)}" 
+              data-family="${escapeHtml(fontFamily)}"
               data-main="${escapeHtml(file.mainCategory || 'image')}"
               data-sub="${escapeHtml(subCategory)}" 
               data-pricing="${escapeHtml(pricing)}"
@@ -1041,6 +1105,7 @@
       btn.addEventListener('click', () => {
         const fileId = btn.getAttribute('data-id');
         const title = btn.getAttribute('data-title');
+        const family = btn.getAttribute('data-family') || '';
         const mainCat = btn.getAttribute('data-main') || 'image';
         const subCat = btn.getAttribute('data-sub') || 'General';
         const pricing = btn.getAttribute('data-pricing') || 'Free';
@@ -1059,6 +1124,15 @@
             if (elements.editFileFormatSelect) elements.editFileFormatSelect.value = format;
           } else {
             elements.editFileFormatGroup.classList.add('hidden');
+          }
+        }
+
+        if (elements.editFileFontFamilyGroup) {
+          if (mainCat === 'font') {
+            elements.editFileFontFamilyGroup.classList.remove('hidden');
+            if (elements.editFileFontFamilyInput) elements.editFileFontFamilyInput.value = family;
+          } else {
+            elements.editFileFontFamilyGroup.classList.add('hidden');
           }
         }
 
@@ -1158,6 +1232,7 @@
 
     const newPricing = elements.editFilePricingSelect ? elements.editFilePricingSelect.value : 'Free';
     const newFormat = elements.editFileFormatSelect ? elements.editFileFormatSelect.value : 'PNG';
+    const newFontFamily = elements.editFileFontFamilyInput ? elements.editFileFontFamilyInput.value.trim() : '';
 
     try {
       const res = await fetch(`/api/presets/${fileId}`, {
@@ -1168,6 +1243,7 @@
         },
         body: JSON.stringify({
           title: newTitle,
+          fontFamily: newFontFamily,
           mainCategory: newMain,
           subCategory: newSub,
           category: newSub,

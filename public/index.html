@@ -321,6 +321,15 @@
                     <option value="SVG">SVG Vector</option>
                   </select>
                 </div>
+
+                <!-- Font Family Option (Auto-detected or Custom) -->
+                <div class="form-group hidden" id="font-family-option-group">
+                  <label for="upload-font-family-input" class="input-label">
+                    <span>Font Family</span>
+                    <span class="label-hint">(Auto-detected if left empty, e.g. Roboto)</span>
+                  </label>
+                  <input type="text" id="upload-font-family-input" class="form-input" placeholder="Auto-detect (e.g. Roboto)">
+                </div>
               </div>
 
               <div class="action-buttons">
@@ -655,6 +664,11 @@
               </select>
               <input type="text" id="edit-file-subcategory-custom" class="form-input hidden" placeholder="Enter custom subcategory...">
             </div>
+          </div>
+
+          <div class="form-group hidden" id="edit-file-font-family-group">
+            <label for="edit-file-font-family-input" class="input-label">Font Family</label>
+            <input type="text" id="edit-file-font-family-input" class="form-input" placeholder="e.g. Roboto">
           </div>
 
           <div class="form-row-2col">
