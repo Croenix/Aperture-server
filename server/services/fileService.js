@@ -2,7 +2,7 @@ const path = require('path');
 const config = require('../config');
 const db = require('../database');
 const { getStorageProvider } = require('./storageService');
-const { generateFileId, isValidFileId, sanitizeOriginalFilename } = require('../utils/fileId');
+const { generateFileId, isValidFileId, sanitizeOriginalFilename, formatTitle } = require('../utils/fileId');
 const { getBaseUrl } = require('../utils/urlHelper');
 
 class FileService {
@@ -24,10 +24,11 @@ class FileService {
     const isPremium = Boolean(record.isPremium || record.is_premium);
 
     const directCloudinaryUrl = record.directUrl || record.direct_url || (record.storageMetadata && record.storageMetadata.secureUrl) || null;
+    const formattedTitle = formatTitle(record.title || record.originalName, record.originalName);
 
     return {
       id: record.id,
-      title: record.title || record.originalName,
+      title: formattedTitle,
       mainCategory,
       subCategory,
       category: subCategory,
@@ -63,9 +64,7 @@ class FileService {
     const mimeType = multerFile.mimetype || 'application/octet-stream';
     const storageProvider = getStorageProvider();
 
-    const customTitle = (metadata && metadata.title && typeof metadata.title === 'string' && metadata.title.trim())
-      ? metadata.title.trim()
-      : originalName;
+    const customTitle = formatTitle(metadata ? metadata.title : '', originalName);
 
     const mainCategory = (metadata && metadata.mainCategory && typeof metadata.mainCategory === 'string' && metadata.mainCategory.trim())
       ? metadata.mainCategory.trim().toLowerCase()
@@ -187,7 +186,11 @@ class FileService {
   }
 
   async updateFile(fileId, updates = {}, reqOrBase = null) {
-    await this.getFileRecord(fileId);
+    const existing = await this.getFileRecord(fileId);
+
+    if (updates && updates.title !== undefined && updates.title !== null) {
+      updates.title = formatTitle(updates.title, existing.originalName);
+    }
 
     const updated = await db.updateFile(fileId, updates);
     if (!updated) {

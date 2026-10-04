@@ -5,7 +5,7 @@ const fs = require('fs');
 const config = require('../config');
 const fileService = require('../services/fileService');
 const { optionalAuth } = require('../middleware/auth');
-const { getSafeExtension } = require('../utils/fileId');
+const { getSafeExtension, formatTitle } = require('../utils/fileId');
 const { getBaseUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
@@ -58,6 +58,7 @@ function toCleanSticker(file, reqOrBase = null) {
   const base = getBaseUrl(reqOrBase);
   const subCategory = file.subCategory || file.sub_category || file.category || 'Badges';
   const isPrem = Boolean(file.isPremium || file.is_premium);
+  const stickerTitle = formatTitle(file.title || file.originalName, file.originalName);
 
   let format = (file.format || file.stickerFormat || '').toUpperCase();
   if (!format || (format !== 'PNG' && format !== 'SVG')) {
@@ -72,8 +73,8 @@ function toCleanSticker(file, reqOrBase = null) {
 
   return {
     id: file.id,
-    name: file.title || file.originalName,
-    title: file.title || file.originalName,
+    name: stickerTitle,
+    title: stickerTitle,
     mainCategory: 'sticker',
     subCategory: subCategory,
     category: subCategory,
@@ -118,32 +119,19 @@ router.post(
   upload.any(),
   async (req, res, next) => {
     try {
-      const stickerFile = (req.files && req.files.length > 0) ? req.files[0] : null;
+      const stickerFiles = (req.files && req.files.length > 0) ? req.files : (req.file ? [req.file] : []);
 
-      if (!stickerFile) {
+      if (stickerFiles.length === 0) {
         return res.status(400).json({
           success: false,
           error: {
             code: 'NO_FILE_PROVIDED',
-            message: 'No sticker file was provided. Please send file in form field "file" or "stickerFile".'
+            message: 'No sticker file was provided. Please send file(s) in form field "file", "stickerFile", or "files".'
           }
         });
       }
 
-      const stickerName = req.body.name || req.body.stickerName || req.body.title || stickerFile.originalname;
       const category = req.body.category || req.body.subCategory || req.body.stickerCategory || 'Badges';
-
-      let stickerFormat = (req.body.format || req.body.stickerFormat || '').trim().toUpperCase();
-      if (!stickerFormat || (stickerFormat !== 'PNG' && stickerFormat !== 'SVG')) {
-        const mime = (stickerFile.mimetype || '').toLowerCase();
-        const orig = (stickerFile.originalname || '').toLowerCase();
-        if (mime.includes('svg') || orig.endsWith('.svg')) {
-          stickerFormat = 'SVG';
-        } else {
-          stickerFormat = 'PNG';
-        }
-      }
-
       const rawPremium = req.body.isPremium ?? req.body.premium ?? req.body.pricing;
       let isPremium = false;
       if (typeof rawPremium === 'boolean') {
@@ -157,26 +145,49 @@ router.post(
         isPremium = rawPremium === 1;
       }
 
-      const fileData = await fileService.processUpload(
-        stickerFile,
-        {
-          title: stickerName,
-          mainCategory: 'sticker',
-          subCategory: category,
-          format: stickerFormat,
-          stickerFormat: stickerFormat,
-          isPremium: isPremium
-        },
-        req.apiKeyInfo,
-        req
-      );
+      const cleanStickers = [];
 
-      const cleanSticker = toCleanSticker(fileData, req);
+      for (const stickerFile of stickerFiles) {
+        const rawName = (stickerFiles.length === 1 && (req.body.name || req.body.stickerName || req.body.title))
+          ? (req.body.name || req.body.stickerName || req.body.title)
+          : stickerFile.originalname;
+
+        let stickerFormat = (req.body.format || req.body.stickerFormat || '').trim().toUpperCase();
+        if (!stickerFormat || (stickerFormat !== 'PNG' && stickerFormat !== 'SVG')) {
+          const mime = (stickerFile.mimetype || '').toLowerCase();
+          const orig = (stickerFile.originalname || '').toLowerCase();
+          if (mime.includes('svg') || orig.endsWith('.svg')) {
+            stickerFormat = 'SVG';
+          } else {
+            stickerFormat = 'PNG';
+          }
+        }
+
+        const fileData = await fileService.processUpload(
+          stickerFile,
+          {
+            title: formatTitle(rawName, stickerFile.originalname),
+            mainCategory: 'sticker',
+            subCategory: category,
+            format: stickerFormat,
+            stickerFormat: stickerFormat,
+            isPremium: isPremium
+          },
+          req.apiKeyInfo,
+          req
+        );
+
+        cleanStickers.push(toCleanSticker(fileData, req));
+      }
 
       return res.status(201).json({
         success: true,
-        message: 'Sticker uploaded successfully.',
-        sticker: cleanSticker
+        message: cleanStickers.length > 1
+          ? `${cleanStickers.length} stickers uploaded successfully.`
+          : 'Sticker uploaded successfully.',
+        count: cleanStickers.length,
+        stickers: cleanStickers,
+        sticker: cleanStickers[0]
       });
     } catch (err) {
       if (req.files) {

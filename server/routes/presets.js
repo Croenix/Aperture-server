@@ -1,10 +1,46 @@
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const fileService = require('../services/fileService');
-const { optionalAuth } = require('../middleware/auth');
+const { optionalAuth, authenticateApiKey } = require('../middleware/auth');
 const config = require('../config');
 const { getBaseUrl } = require('../utils/urlHelper');
+const { formatTitle, getSafeExtension } = require('../utils/fileId');
 
 const router = express.Router();
+
+const tempDir = path.resolve(config.uploadDirectory, '.tmp');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
+const uploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, tempDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    cb(null, `tmp_preset_${uniqueSuffix}`);
+  }
+});
+
+const upload = multer({
+  storage: uploadStorage,
+  limits: {
+    fileSize: config.maxFileSizeBytes
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = getSafeExtension(file.originalname);
+    if (config.blockedExtensions.includes(ext)) {
+      const err = new Error(`File type '.${ext}' is blocked for security reasons.`);
+      err.code = 'BLOCKED_FILE_TYPE';
+      err.status = 400;
+      return cb(err, false);
+    }
+    cb(null, true);
+  }
+});
 
 const DEFAULT_IMAGE_SUBCATEGORIES = [
   'Vintage',
@@ -23,10 +59,12 @@ function toCleanPreset(file, reqOrBase = null) {
   const base = getBaseUrl(reqOrBase);
   const mainCategory = file.mainCategory || file.main_category || 'image';
   const subCategory = file.subCategory || file.sub_category || file.category || 'general';
+  const presetTitle = formatTitle(file.title || file.originalName, file.originalName);
 
   return {
     id: file.id,
-    title: file.title || file.originalName,
+    title: presetTitle,
+    name: presetTitle,
     mainCategory: mainCategory,
     subCategory: subCategory,
     category: subCategory,
@@ -185,6 +223,69 @@ router.get('/', optionalAuth, async (req, res, next) => {
     next(err);
   }
 });
+
+router.post(
+  '/',
+  optionalAuth,
+  upload.any(),
+  async (req, res, next) => {
+    try {
+      const presetFiles = (req.files && req.files.length > 0) ? req.files : (req.file ? [req.file] : []);
+
+      if (presetFiles.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'NO_FILE_PROVIDED',
+            message: 'No preset file was provided. Please send file(s) in form field "file", "presetFile", or "files".'
+          }
+        });
+      }
+
+      const mainCategory = (req.body.mainCategory || req.body.main_category || 'image').trim().toLowerCase();
+      const subCategory = (req.body.subCategory || req.body.sub_category || req.body.category || 'Vintage').trim();
+      const cleanPresets = [];
+
+      for (const pFile of presetFiles) {
+        const rawName = (presetFiles.length === 1 && (req.body.name || req.body.title))
+          ? (req.body.name || req.body.title)
+          : pFile.originalname;
+
+        const fileData = await fileService.processUpload(
+          pFile,
+          {
+            title: formatTitle(rawName, pFile.originalname),
+            mainCategory,
+            subCategory
+          },
+          req.apiKeyInfo,
+          req
+        );
+
+        cleanPresets.push(toCleanPreset(fileData, req));
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: cleanPresets.length > 1
+          ? `${cleanPresets.length} presets uploaded successfully.`
+          : 'Preset uploaded successfully.',
+        count: cleanPresets.length,
+        presets: cleanPresets,
+        preset: cleanPresets[0]
+      });
+    } catch (err) {
+      if (req.files) {
+        req.files.forEach(f => {
+          if (f.path && fs.existsSync(f.path)) {
+            fs.promises.unlink(f.path).catch(() => {});
+          }
+        });
+      }
+      next(err);
+    }
+  }
+);
 
 router.get('/grouped', optionalAuth, async (req, res, next) => {
   try {

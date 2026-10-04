@@ -6,7 +6,7 @@ const config = require('../config');
 const fileService = require('../services/fileService');
 const { optionalAuth, authenticateApiKey } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
-const { getSafeExtension } = require('../utils/fileId');
+const { getSafeExtension, formatTitle } = require('../utils/fileId');
 const { getBaseUrl } = require('../utils/urlHelper');
 
 const router = express.Router();
@@ -50,11 +50,12 @@ const upload = multer({
 function toCleanFont(file, reqOrBase = null) {
   const base = getBaseUrl(reqOrBase);
   const subCategory = file.subCategory || file.sub_category || file.category || 'Normal';
+  const fontTitle = formatTitle(file.title || file.originalName, file.originalName);
 
   return {
     id: file.id,
-    name: file.title || file.originalName,
-    title: file.title || file.originalName,
+    name: fontTitle,
+    title: fontTitle,
     mainCategory: 'font',
     subCategory: subCategory,
     category: subCategory,
@@ -93,38 +94,48 @@ router.post(
   upload.any(),
   async (req, res, next) => {
     try {
-      const fontFile = (req.files && req.files.length > 0) ? req.files[0] : null;
+      const fontFiles = (req.files && req.files.length > 0) ? req.files : (req.file ? [req.file] : []);
 
-      if (!fontFile) {
+      if (fontFiles.length === 0) {
         return res.status(400).json({
           success: false,
           error: {
             code: 'NO_FILE_PROVIDED',
-            message: 'No font file was provided. Please send file in form field "file" or "fontFile".'
+            message: 'No font file was provided. Please send file(s) in form field "file", "fontFile", or "files".'
           }
         });
       }
 
-      const fontName = req.body.name || req.body.fontName || req.body.title || fontFile.originalname;
       const subCategory = req.body.subCategory || req.body.category || req.body.fontStyle || 'Normal';
+      const cleanFonts = [];
 
-      const fileData = await fileService.processUpload(
-        fontFile,
-        {
-          title: fontName,
-          mainCategory: 'font',
-          subCategory: subCategory
-        },
-        req.apiKeyInfo,
-        req
-      );
+      for (const fontFile of fontFiles) {
+        const rawName = (fontFiles.length === 1 && (req.body.name || req.body.fontName || req.body.title))
+          ? (req.body.name || req.body.fontName || req.body.title)
+          : fontFile.originalname;
 
-      const cleanFont = toCleanFont(fileData, req);
+        const fileData = await fileService.processUpload(
+          fontFile,
+          {
+            title: formatTitle(rawName, fontFile.originalname),
+            mainCategory: 'font',
+            subCategory: subCategory
+          },
+          req.apiKeyInfo,
+          req
+        );
+
+        cleanFonts.push(toCleanFont(fileData, req));
+      }
 
       return res.status(201).json({
         success: true,
-        message: 'Font uploaded successfully.',
-        font: cleanFont
+        message: cleanFonts.length > 1
+          ? `${cleanFonts.length} fonts uploaded successfully.`
+          : 'Font uploaded successfully.',
+        count: cleanFonts.length,
+        fonts: cleanFonts,
+        font: cleanFonts[0]
       });
     } catch (err) {
       if (req.files) {

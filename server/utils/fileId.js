@@ -72,9 +72,41 @@ function getSafeExtension(filename) {
   return ext.startsWith('.') ? ext.slice(1) : ext;
 }
 
+/**
+ * Formats a title or derives it from original filename:
+ * Strips file extension, replaces all '-' and '.' with spaces, collapses multiple spaces, and trims.
+ * @param {string} rawTitle 
+ * @param {string} [originalName] 
+ * @returns {string}
+ */
+function formatTitle(rawTitle, originalName = '') {
+  let text = (rawTitle && typeof rawTitle === 'string' && rawTitle.trim()) ? rawTitle.trim() : '';
+
+  if (!text && originalName && typeof originalName === 'string') {
+    text = originalName.trim();
+  }
+
+  if (!text) return 'unnamed';
+
+  // Strip non-numeric file extension if present (e.g. .ttf, .png, .lut, .cube, .otf)
+  const match = text.match(/\.([a-zA-Z0-9]{2,8})$/);
+  if (match) {
+    const extName = match[1].toLowerCase();
+    // Only strip if extension is not purely numeric (e.g. avoid stripping .2 from v1.2)
+    if (!/^\d+$/.test(extName)) {
+      text = text.slice(0, text.length - match[0].length);
+    }
+  }
+
+  // Replace '-' and '.' with space ' ', collapse multiple spaces, trim
+  return text.replace(/[-.]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 module.exports = {
   generateFileId,
   isValidFileId,
   sanitizeOriginalFilename,
-  getSafeExtension
+  getSafeExtension,
+  formatTitle
 };
+

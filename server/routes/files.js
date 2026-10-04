@@ -53,49 +53,63 @@ const upload = multer({
 });
 
 /**
- * POST /api/v1/files
+ * POST /api/v1/files (Supports single and bulk uploads)
  */
 router.post(
   '/',
   authenticateApiKey,
   requirePermission('files:upload'),
-  upload.single('file'),
+  upload.any(),
   async (req, res, next) => {
     try {
-      if (!req.file) {
+      const filesList = (req.files && req.files.length > 0) ? req.files : (req.file ? [req.file] : []);
+
+      if (filesList.length === 0) {
         return res.status(400).json({
           success: false,
           error: {
             code: 'NO_FILE_PROVIDED',
-            message: 'No file was provided in the upload request. Please specify a file using form-data field "file".'
+            message: 'No file was provided in the upload request. Please specify file(s) using form-data field "file" or "files".'
           }
         });
       }
 
-      const fileData = await fileService.processUpload(
-        req.file,
-        {
-          title: req.body.title,
-          mainCategory: req.body.mainCategory || req.body.main_category,
-          subCategory: req.body.subCategory || req.body.sub_category || req.body.category,
-          category: req.body.subCategory || req.body.sub_category || req.body.category,
-          pricing: req.body.pricing,
-          isPremium: req.body.isPremium || req.body.is_premium,
-          format: req.body.format || req.body.stickerFormat,
-          stickerFormat: req.body.format || req.body.stickerFormat
-        },
-        req.apiKeyInfo,
-        req
-      );
+      const uploadedFiles = [];
+      for (const fileItem of filesList) {
+        const fileData = await fileService.processUpload(
+          fileItem,
+          {
+            title: req.body.title,
+            mainCategory: req.body.mainCategory || req.body.main_category,
+            subCategory: req.body.subCategory || req.body.sub_category || req.body.category,
+            category: req.body.subCategory || req.body.sub_category || req.body.category,
+            pricing: req.body.pricing,
+            isPremium: req.body.isPremium || req.body.is_premium,
+            format: req.body.format || req.body.stickerFormat,
+            stickerFormat: req.body.format || req.body.stickerFormat
+          },
+          req.apiKeyInfo,
+          req
+        );
+        uploadedFiles.push(fileData);
+      }
 
       return res.status(201).json({
         success: true,
-        file: fileData
+        message: uploadedFiles.length > 1 
+          ? `${uploadedFiles.length} files uploaded successfully.`
+          : 'File uploaded successfully.',
+        count: uploadedFiles.length,
+        files: uploadedFiles,
+        file: uploadedFiles[0]
       });
     } catch (err) {
-      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-        fs.promises.unlink(req.file.path).catch(() => {});
-      }
+      const filesToClean = (req.files && req.files.length > 0) ? req.files : (req.file ? [req.file] : []);
+      filesToClean.forEach(f => {
+        if (f && f.path && fs.existsSync(f.path)) {
+          fs.promises.unlink(f.path).catch(() => {});
+        }
+      });
       next(err);
     }
   }

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const logger = require('./utils/logger');
+const { formatTitle } = require('./utils/fileId');
 
 // Initialize Mongoose Schema for MongoDB Atlas
 const fileSchema = new mongoose.Schema({
@@ -221,11 +222,14 @@ function _mapRecord(docOrRow) {
   const subCategory = data.subCategory || data.sub_category || data.category || 'general';
   const isPremium = Boolean(data.isPremium || data.is_premium);
 
+  const origName = data.originalName || data.original_name;
+  const cleanTitle = formatTitle(data.title || origName, origName);
+
   return {
     id: data.id,
-    originalName: data.originalName || data.original_name,
+    originalName: origName,
     filename: data.filename,
-    title: data.title || data.originalName || data.original_name,
+    title: cleanTitle,
     mainCategory,
     subCategory,
     category: subCategory,
@@ -256,12 +260,13 @@ const dbOperations = {
     }
 
     const isPrem = Boolean(fileRecord.isPremium || fileRecord.is_premium || fileRecord.pricing === 'Paid' || fileRecord.pricing === 'paid');
+    const titleVal = formatTitle(fileRecord.title || fileRecord.originalName, fileRecord.originalName);
 
     const recordData = {
       id: fileRecord.id,
       originalName: fileRecord.originalName,
       filename: fileRecord.filename,
-      title: fileRecord.title || fileRecord.originalName,
+      title: titleVal,
       mainCategory,
       subCategory,
       category: subCategory,
