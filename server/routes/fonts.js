@@ -52,12 +52,14 @@ function toCleanFont(file, reqOrBase = null) {
   const subCategory = file.subCategory || file.sub_category || file.category || 'Normal';
   const fontTitle = formatTitle(file.title || file.originalName, file.originalName);
   const fontFamily = file.fontFamily || file.font_family || deriveFontFamily(fontTitle, file.originalName, file.fontFamily || file.font_family);
+  const language = file.language || file.lang || 'English';
 
   return {
     id: file.id,
     name: fontTitle,
     title: fontTitle,
     fontFamily: fontFamily,
+    language: language,
     mainCategory: 'font',
     subCategory: subCategory,
     category: subCategory,
@@ -90,6 +92,18 @@ router.get('/categories', optionalAuth, async (req, res, next) => {
   }
 });
 
+router.get('/languages', optionalAuth, async (req, res, next) => {
+  try {
+    const languages = await fileService.listFontLanguages();
+    return res.json({
+      success: true,
+      languages
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post(
   '/',
   optionalAuth,
@@ -110,6 +124,7 @@ router.post(
 
       const subCategory = req.body.subCategory || req.body.category || req.body.fontStyle || 'Normal';
       const userFontFamily = req.body.fontFamily || req.body.font_family || req.body.family || '';
+      const fontLanguage = req.body.language || req.body.lang || 'English';
       const cleanFonts = [];
 
       for (const fontFile of fontFiles) {
@@ -122,6 +137,7 @@ router.post(
           {
             title: formatTitle(rawName, fontFile.originalname),
             fontFamily: userFontFamily,
+            language: fontLanguage,
             mainCategory: 'font',
             subCategory: subCategory
           },
@@ -216,6 +232,7 @@ router.get('/family/:familyName', optionalAuth, async (req, res, next) => {
 router.get('/', optionalAuth, async (req, res, next) => {
   try {
     const subCategory = req.query.subCategory || req.query.category || req.query.fontStyle;
+    const language = req.query.language || req.query.lang;
     const { search, fontFamily: reqFamily } = req.query;
 
     const result = await fileService.listFiles({
@@ -223,7 +240,8 @@ router.get('/', optionalAuth, async (req, res, next) => {
       limit: 1000,
       search,
       mainCategory: 'font',
-      subCategory: subCategory || ''
+      subCategory: subCategory || '',
+      language: language || ''
     }, req);
 
     let fonts = result.files.map(f => toCleanFont(f, req));
@@ -234,11 +252,16 @@ router.get('/', optionalAuth, async (req, res, next) => {
 
     const subGrouped = {};
     const familyMap = {};
+    const langGrouped = {};
 
     fonts.forEach(f => {
       const sub = f.subCategory || 'Normal';
       if (!subGrouped[sub]) subGrouped[sub] = [];
       subGrouped[sub].push(f);
+
+      const lang = f.language || 'English';
+      if (!langGrouped[lang]) langGrouped[lang] = [];
+      langGrouped[lang].push(f);
 
       const fam = f.fontFamily || deriveFontFamily(f.name, f.fileName) || 'General';
       if (!familyMap[fam]) {
@@ -254,6 +277,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
     });
 
     const fontFamilies = Object.values(familyMap);
+    const availableLanguages = await fileService.listFontLanguages();
 
     return res.json({
       success: true,
@@ -261,8 +285,10 @@ router.get('/', optionalAuth, async (req, res, next) => {
       count: fonts.length,
       fontFamilyCount: fontFamilies.length,
       subCategories: Object.keys(subGrouped),
+      languages: availableLanguages,
       fontFamilies: fontFamilies,
       groupedByFamily: familyMap,
+      groupedByLanguage: langGrouped,
       fonts: fonts,
       grouped: subGrouped
     });
@@ -307,10 +333,11 @@ router.get('/:subCategoryOrId', optionalAuth, async (req, res, next) => {
 const handleUpdateFont = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, fontName, title, subCategory, category, fontFamily, font_family, family } = req.body;
+    const { name, fontName, title, subCategory, category, fontFamily, font_family, family, language, lang } = req.body;
     const updated = await fileService.updateFile(id, {
       title: name || fontName || title,
       fontFamily: fontFamily || font_family || family,
+      language: language || lang,
       mainCategory: 'font',
       subCategory: subCategory || category
     }, req);

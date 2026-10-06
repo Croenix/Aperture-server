@@ -8,6 +8,7 @@ const filesRouter = require('./routes/files');
 const presetsRouter = require('./routes/presets');
 const fontsRouter = require('./routes/fonts');
 const stickersRouter = require('./routes/stickers');
+const backgroundsRouter = require('./routes/backgrounds');
 const { streamFileResponse } = require('./routes/files');
 const healthRouter = require('./routes/health');
 const keysRouter = require('./routes/keys');
@@ -113,6 +114,13 @@ app.use('/api/stickers', apiLimiter, stickersRouter);
 app.use('/api/sticker', apiLimiter, stickersRouter);
 app.use('/stickers', apiLimiter, stickersRouter);
 app.use('/sticker', apiLimiter, stickersRouter);
+
+app.use('/api/v1/backgrounds', apiLimiter, backgroundsRouter);
+app.use('/api/v1/background', apiLimiter, backgroundsRouter);
+app.use('/api/backgrounds', apiLimiter, backgroundsRouter);
+app.use('/api/background', apiLimiter, backgroundsRouter);
+app.use('/backgrounds', apiLimiter, backgroundsRouter);
+app.use('/background', apiLimiter, backgroundsRouter);
 
 app.use('/api/v1/files', apiLimiter, filesRouter);
 app.use('/api/v1/health', healthRouter);

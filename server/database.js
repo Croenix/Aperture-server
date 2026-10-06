@@ -13,6 +13,9 @@ const fileSchema = new mongoose.Schema({
   filename: { type: String, required: true },
   title: { type: String },
   fontFamily: { type: String, index: true },
+  language: { type: String, default: 'English', index: true },
+  orientation: { type: String, index: true },
+  keywords: [{ type: String, index: true }],
   mainCategory: { type: String, default: 'image', index: true },
   subCategory: { type: String, default: 'general', index: true },
   category: { type: String, default: 'general', index: true },
@@ -79,6 +82,9 @@ function initSqliteSchema() {
       filename TEXT NOT NULL,
       title TEXT,
       font_family TEXT,
+      language TEXT NOT NULL DEFAULT 'English',
+      orientation TEXT,
+      keywords TEXT,
       main_category TEXT NOT NULL DEFAULT 'image',
       sub_category TEXT NOT NULL DEFAULT 'general',
       category TEXT NOT NULL DEFAULT 'general',
@@ -110,6 +116,9 @@ function initSqliteSchema() {
   const requiredColumns = [
     { name: 'title', type: 'TEXT' },
     { name: 'font_family', type: 'TEXT' },
+    { name: 'language', type: "TEXT NOT NULL DEFAULT 'English'" },
+    { name: 'orientation', type: 'TEXT' },
+    { name: 'keywords', type: 'TEXT' },
     { name: 'main_category', type: "TEXT NOT NULL DEFAULT 'image'" },
     { name: 'sub_category', type: "TEXT NOT NULL DEFAULT 'general'" },
     { name: 'category', type: "TEXT NOT NULL DEFAULT 'general'" },
@@ -184,6 +193,9 @@ async function syncSqliteToMongo() {
           filename: r.filename,
           title: r.title || r.original_name,
           fontFamily: r.font_family || (r.main_category === 'font' ? deriveFontFamily(r.title || r.original_name, r.original_name) : null),
+          language: r.language || 'English',
+          orientation: r.orientation || null,
+          keywords: r.keywords ? (typeof r.keywords === 'string' ? (r.keywords.startsWith('[') ? JSON.parse(r.keywords) : r.keywords.split(',').map(k => k.trim())) : r.keywords) : [],
           mainCategory: r.main_category || 'image',
           subCategory: r.sub_category || r.category || 'general',
           category: r.sub_category || r.category || 'general',
@@ -229,6 +241,22 @@ function _mapRecord(docOrRow) {
   const origName = data.originalName || data.original_name;
   const cleanTitle = formatTitle(data.title || origName, origName);
   const fontFamily = data.fontFamily || data.font_family || (mainCategory === 'font' ? deriveFontFamily(cleanTitle, origName) : null);
+  const language = data.language || 'English';
+
+  let parsedKeywords = [];
+  if (data.keywords) {
+    if (Array.isArray(data.keywords)) {
+      parsedKeywords = data.keywords.map(k => String(k).trim()).filter(Boolean);
+    } else if (typeof data.keywords === 'string') {
+      try {
+        parsedKeywords = JSON.parse(data.keywords);
+      } catch (e) {
+        parsedKeywords = data.keywords.split(',').map(k => k.trim()).filter(Boolean);
+      }
+    }
+  }
+
+  const orientation = data.orientation ? String(data.orientation).trim().toLowerCase() : null;
 
   return {
     id: data.id,
@@ -236,6 +264,9 @@ function _mapRecord(docOrRow) {
     filename: data.filename,
     title: cleanTitle,
     fontFamily: fontFamily,
+    language: language,
+    orientation: orientation,
+    keywords: parsedKeywords,
     mainCategory,
     subCategory,
     category: subCategory,
@@ -268,6 +299,22 @@ const dbOperations = {
     const isPrem = Boolean(fileRecord.isPremium || fileRecord.is_premium || fileRecord.pricing === 'Paid' || fileRecord.pricing === 'paid');
     const titleVal = formatTitle(fileRecord.title || fileRecord.originalName, fileRecord.originalName);
     const fontFamilyVal = fileRecord.fontFamily || fileRecord.font_family || (mainCategory === 'font' ? deriveFontFamily(titleVal, fileRecord.originalName, fileRecord.fontFamily || fileRecord.font_family) : null);
+    const languageVal = (fileRecord.language || fileRecord.lang || 'English').trim() || 'English';
+
+    let orientationVal = fileRecord.orientation || fileRecord.aspectRatio || null;
+    if (orientationVal && typeof orientationVal === 'string') {
+      orientationVal = orientationVal.trim().toLowerCase();
+    }
+
+    let keywordsVal = [];
+    if (fileRecord.keywords) {
+      if (Array.isArray(fileRecord.keywords)) {
+        keywordsVal = fileRecord.keywords.map(k => String(k).trim()).filter(Boolean);
+      } else if (typeof fileRecord.keywords === 'string') {
+        keywordsVal = fileRecord.keywords.split(',').map(k => k.trim()).filter(Boolean);
+      }
+    }
+    keywordsVal = keywordsVal.slice(0, 20);
 
     const recordData = {
       id: fileRecord.id,
@@ -275,6 +322,9 @@ const dbOperations = {
       filename: fileRecord.filename,
       title: titleVal,
       fontFamily: fontFamilyVal,
+      language: languageVal,
+      orientation: orientationVal,
+      keywords: keywordsVal,
       mainCategory,
       subCategory,
       category: subCategory,
@@ -301,11 +351,11 @@ const dbOperations = {
 
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO files (
-        id, original_name, filename, title, font_family, main_category, sub_category, category, format, mime_type, size,
+        id, original_name, filename, title, font_family, language, orientation, keywords, main_category, sub_category, category, format, mime_type, size,
         storage_provider, storage_path, direct_url, storage_metadata, is_premium,
         uploaded_at, created_by, is_deleted
       ) VALUES (
-        @id, @originalName, @filename, @title, @fontFamily, @mainCategory, @subCategory, @category, @format, @mimeType, @size,
+        @id, @originalName, @filename, @title, @fontFamily, @language, @orientation, @keywordsStr, @mainCategory, @subCategory, @category, @format, @mimeType, @size,
         @storageProvider, @storagePath, @directUrl, @storageMetadata, @isPremium,
         @uploadedAt, @createdBy, 0
       )
@@ -313,6 +363,7 @@ const dbOperations = {
 
     stmt.run({
       ...recordData,
+      keywordsStr: JSON.stringify(keywordsVal),
       isPremium: isPrem ? 1 : 0,
       storageMetadata: recordData.storageMetadata ? JSON.stringify(recordData.storageMetadata) : null
     });
@@ -335,7 +386,7 @@ const dbOperations = {
     return null;
   },
 
-  async listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '', isPremium, pricing } = {}) {
+  async listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '', isPremium, pricing, language, orientation, keyword } = {}) {
     if (isMongoActive()) {
       try {
         const query = { isDeleted: false };
@@ -353,6 +404,21 @@ const dbOperations = {
           ];
         }
 
+        const activeLang = (language || '').trim();
+        if (activeLang && activeLang.toLowerCase() !== 'all') {
+          query.language = new RegExp(`^${escapeRegex(activeLang)}$`, 'i');
+        }
+
+        const activeOri = (orientation || '').trim();
+        if (activeOri && activeOri.toLowerCase() !== 'all') {
+          query.orientation = new RegExp(`^${escapeRegex(activeOri)}$`, 'i');
+        }
+
+        const activeKw = (keyword || '').trim();
+        if (activeKw && activeKw.toLowerCase() !== 'all') {
+          query.keywords = new RegExp(escapeRegex(activeKw), 'i');
+        }
+
         const targetPremium = isPremium !== undefined ? isPremium : (pricing !== undefined ? (pricing === 'Paid' || pricing === 'paid' || pricing === 'true' || pricing === '1') : undefined);
         if (targetPremium !== undefined && targetPremium !== null && targetPremium !== 'all') {
           query.isPremium = (targetPremium === true || targetPremium === 'true' || targetPremium === 1 || targetPremium === '1');
@@ -368,7 +434,10 @@ const dbOperations = {
             { subCategory: regex },
             { mainCategory: regex },
             { category: regex },
-            { mimeType: regex }
+            { mimeType: regex },
+            { language: regex },
+            { orientation: regex },
+            { keywords: regex }
           ];
           if (query.$or) {
             query.$and = [{ $or: query.$or }, { $or: searchOr }];
@@ -418,6 +487,31 @@ const dbOperations = {
       params.push(activeSub, activeSub);
     }
 
+    const activeLang = (language || '').trim();
+    if (activeLang && activeLang.toLowerCase() !== 'all') {
+      countSql += ' AND LOWER(language) = LOWER(?)';
+      querySql += ' AND LOWER(language) = LOWER(?)';
+      countParams.push(activeLang);
+      params.push(activeLang);
+    }
+
+    const activeOri = (orientation || '').trim();
+    if (activeOri && activeOri.toLowerCase() !== 'all') {
+      countSql += ' AND LOWER(orientation) = LOWER(?)';
+      querySql += ' AND LOWER(orientation) = LOWER(?)';
+      countParams.push(activeOri.toLowerCase());
+      params.push(activeOri.toLowerCase());
+    }
+
+    const activeKw = (keyword || '').trim();
+    if (activeKw && activeKw.toLowerCase() !== 'all') {
+      const kwPattern = `%${activeKw}%`;
+      countSql += ' AND keywords LIKE ?';
+      querySql += ' AND keywords LIKE ?';
+      countParams.push(kwPattern);
+      params.push(kwPattern);
+    }
+
     const targetPremium = isPremium !== undefined ? isPremium : (pricing !== undefined ? (pricing === 'Paid' || pricing === 'paid' || pricing === 'true' || pricing === '1') : undefined);
     if (targetPremium !== undefined && targetPremium !== null && targetPremium !== 'all') {
       const premVal = (targetPremium === true || targetPremium === 'true' || targetPremium === 1 || targetPremium === '1') ? 1 : 0;
@@ -429,10 +523,10 @@ const dbOperations = {
 
     if (search && search.trim()) {
       const searchPattern = `%${search.trim()}%`;
-      countSql += ' AND (original_name LIKE ? OR title LIKE ? OR id LIKE ? OR sub_category LIKE ? OR main_category LIKE ? OR category LIKE ? OR mime_type LIKE ?)';
-      querySql += ' AND (original_name LIKE ? OR title LIKE ? OR id LIKE ? OR sub_category LIKE ? OR main_category LIKE ? OR category LIKE ? OR mime_type LIKE ?)';
-      countParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
-      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+      countSql += ' AND (original_name LIKE ? OR title LIKE ? OR id LIKE ? OR sub_category LIKE ? OR main_category LIKE ? OR category LIKE ? OR mime_type LIKE ? OR language LIKE ? OR orientation LIKE ? OR keywords LIKE ?)';
+      querySql += ' AND (original_name LIKE ? OR title LIKE ? OR id LIKE ? OR sub_category LIKE ? OR main_category LIKE ? OR category LIKE ? OR mime_type LIKE ? OR language LIKE ? OR orientation LIKE ? OR keywords LIKE ?)';
+      countParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
     querySql += ' ORDER BY uploaded_at DESC LIMIT ? OFFSET ?';
@@ -495,10 +589,59 @@ const dbOperations = {
     return { raw: rows, hierarchy };
   },
 
+  async listFontLanguages() {
+    const defaultLangs = ['English', 'Malayalam', 'Tamil'];
+    if (isMongoActive()) {
+      try {
+        const distincts = await FileModel.distinct('language', { isDeleted: false, mainCategory: 'font' });
+        const set = new Set([...defaultLangs, ...(distincts || []).filter(Boolean)]);
+        return Array.from(set);
+      } catch (err) {
+        console.warn('⚠️ MongoDB listFontLanguages failed, falling back to SQLite:', err.message);
+      }
+    }
+
+    try {
+      const rows = db.prepare(`SELECT DISTINCT language FROM files WHERE is_deleted = 0 AND main_category = 'font'`).all();
+      const set = new Set([...defaultLangs, ...rows.map(r => r.language).filter(Boolean)]);
+      return Array.from(set);
+    } catch (err) {
+      return defaultLangs;
+    }
+  },
+
   async updateFile(id, updates = {}) {
     const fields = [];
     const params = [];
     const mongoUpdates = {};
+
+    const targetLang = updates.language || updates.lang;
+    if (targetLang !== undefined && typeof targetLang === 'string' && targetLang.trim()) {
+      const cleanLang = targetLang.trim();
+      fields.push('language = ?');
+      params.push(cleanLang);
+      mongoUpdates.language = cleanLang;
+    }
+
+    if (updates.orientation !== undefined) {
+      const ori = updates.orientation ? String(updates.orientation).trim().toLowerCase() : null;
+      fields.push('orientation = ?');
+      params.push(ori);
+      mongoUpdates.orientation = ori;
+    }
+
+    if (updates.keywords !== undefined) {
+      let kw = [];
+      if (Array.isArray(updates.keywords)) {
+        kw = updates.keywords.map(k => String(k).trim()).filter(Boolean);
+      } else if (typeof updates.keywords === 'string') {
+        kw = updates.keywords.split(',').map(k => k.trim()).filter(Boolean);
+      }
+      kw = kw.slice(0, 20);
+      fields.push('keywords = ?');
+      params.push(JSON.stringify(kw));
+      mongoUpdates.keywords = kw;
+    }
 
     const targetFontFamily = updates.fontFamily || updates.font_family || updates.family;
     if (targetFontFamily !== undefined && typeof targetFontFamily === 'string' && targetFontFamily.trim()) {

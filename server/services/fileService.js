@@ -27,11 +27,17 @@ class FileService {
     const formattedTitle = formatTitle(record.title || record.originalName, record.originalName);
 
     const fontFamily = record.fontFamily || record.font_family || (mainCategory === 'font' ? deriveFontFamily(formattedTitle, record.originalName) : null);
+    const language = record.language || 'English';
+    const orientation = record.orientation || null;
+    const keywords = record.keywords || [];
 
     return {
       id: record.id,
       title: formattedTitle,
       fontFamily: fontFamily,
+      language: language,
+      orientation: orientation,
+      keywords: keywords,
       mainCategory,
       subCategory,
       category: subCategory,
@@ -82,6 +88,20 @@ class FileService {
       ? deriveFontFamily(customTitle, originalName, rawFontFamily)
       : null;
 
+    const language = (metadata && (metadata.language || metadata.lang) && typeof (metadata.language || metadata.lang) === 'string' && (metadata.language || metadata.lang).trim())
+      ? (metadata.language || metadata.lang).trim()
+      : 'English';
+
+    const orientation = (metadata && (metadata.orientation || metadata.aspectRatio) && typeof (metadata.orientation || metadata.aspectRatio) === 'string')
+      ? (metadata.orientation || metadata.aspectRatio).trim().toLowerCase()
+      : null;
+
+    let keywords = [];
+    if (metadata && metadata.keywords) {
+      if (Array.isArray(metadata.keywords)) keywords = metadata.keywords;
+      else if (typeof metadata.keywords === 'string') keywords = metadata.keywords.split(',').map(k => k.trim()).filter(Boolean);
+    }
+
     // Save physical asset via Cloudinary
     const saveResult = await storageProvider.saveFile({
       fileId,
@@ -98,6 +118,9 @@ class FileService {
       filename: saveResult.storageFilename,
       title: customTitle,
       fontFamily,
+      language,
+      orientation,
+      keywords,
       mainCategory,
       subCategory,
       isPremium: metadata.isPremium || metadata.is_premium || metadata.pricing === 'Paid' || metadata.pricing === 'paid' || metadata.premium === 'Yes' || metadata.premium === 'yes' || metadata.premium === true,
@@ -159,11 +182,11 @@ class FileService {
     return { stream, fileRecord };
   }
 
-  async listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '', isPremium, pricing } = {}, reqOrBase = null) {
+  async listFiles({ page = 1, limit = 20, search = '', category = '', mainCategory = '', subCategory = '', isPremium, pricing, language, orientation, keyword } = {}, reqOrBase = null) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(1000, Math.max(1, parseInt(limit, 10) || 20));
 
-    const result = await db.listFiles({ page: pageNum, limit: limitNum, search, category, mainCategory, subCategory, isPremium, pricing });
+    const result = await db.listFiles({ page: pageNum, limit: limitNum, search, category, mainCategory, subCategory, isPremium, pricing, language, orientation, keyword });
     return {
       files: result.files.map(f => this.formatFileResponse(f, reqOrBase)),
       pagination: result.pagination
@@ -172,6 +195,10 @@ class FileService {
 
   async listCategories() {
     return await db.listCategories();
+  }
+
+  async listFontLanguages() {
+    return await db.listFontLanguages();
   }
 
   async getGroupedPresets({ search = '', mainCategory = '' } = {}, reqOrBase = null) {

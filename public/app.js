@@ -18,6 +18,11 @@
     'Logos', 'Vectors', 'Labels', 'Illustrations'
   ];
 
+  const DEFAULT_BACKGROUND_SUBCATEGORIES = [
+    'Abstract', 'Nature', 'Gradient', 'Studio', 'Textures',
+    'Minimalist', '3D', 'Urban', 'Pattern'
+  ];
+
   // Application State
   const state = {
     currentFile: null,
@@ -32,6 +37,8 @@
     searchQuery: '',
     selectedMainFilter: 'all',
     selectedSubFilter: 'all',
+    selectedLanguageFilter: 'all',
+    selectedOrientationFilter: 'all',
     viewMode: localStorage.getItem('aperture_view_mode') || 'grid',
     totalPages: 1,
     filesList: [],
@@ -39,7 +46,8 @@
       image: [...DEFAULT_IMAGE_SUBCATEGORIES],
       text: [],
       font: [...DEFAULT_FONT_SUBCATEGORIES],
-      sticker: [...DEFAULT_STICKER_CATEGORIES]
+      sticker: [...DEFAULT_STICKER_CATEGORIES],
+      background: [...DEFAULT_BACKGROUND_SUBCATEGORIES]
     }
   };
 
@@ -70,10 +78,17 @@
     uploadFormatSelect: document.getElementById('upload-format-select'),
     fontFamilyOptionGroup: document.getElementById('font-family-option-group'),
     uploadFontFamilyInput: document.getElementById('upload-font-family-input'),
+    fontLanguageOptionGroup: document.getElementById('font-language-option-group'),
+    uploadFontLanguageSelect: document.getElementById('upload-font-language-select'),
+    uploadFontLanguageCustom: document.getElementById('upload-font-language-custom'),
+    backgroundOptionGroup: document.getElementById('background-option-group'),
+    uploadBgOrientationSelect: document.getElementById('upload-bg-orientation-select'),
+    uploadBgKeywordsInput: document.getElementById('upload-bg-keywords-input'),
     toggleCatImage: document.getElementById('toggle-cat-image'),
     toggleCatText: document.getElementById('toggle-cat-text'),
     toggleCatFont: document.getElementById('toggle-cat-font'),
     toggleCatSticker: document.getElementById('toggle-cat-sticker'),
+    toggleCatBackground: document.getElementById('toggle-cat-background'),
     customSubcategorySelect: document.getElementById('custom-subcategory-select'),
     customSubcategoryInput: document.getElementById('custom-subcategory-input'),
     subcategoryLabelHint: document.getElementById('subcategory-label-hint'),
@@ -115,6 +130,10 @@
     fileSearchInput: document.getElementById('file-search-input'),
     mainCategoryFilterSelect: document.getElementById('main-category-filter-select'),
     categoryFilterSelect: document.getElementById('category-filter-select'),
+    languageFilterWrap: document.getElementById('language-filter-wrap'),
+    languageFilterSelect: document.getElementById('language-filter-select'),
+    orientationFilterWrap: document.getElementById('orientation-filter-wrap'),
+    orientationFilterSelect: document.getElementById('orientation-filter-select'),
     refreshFilesBtn: document.getElementById('refresh-files-btn'),
     fileTotalCount: document.getElementById('file-total-count'),
     paginationInfo: document.getElementById('pagination-info'),
@@ -134,6 +153,7 @@
     statTextCount: document.getElementById('stat-text-count'),
     statFontCount: document.getElementById('stat-font-count'),
     statStickerCount: document.getElementById('stat-sticker-count'),
+    statBackgroundCount: document.getElementById('stat-background-count'),
     statStorageTotal: document.getElementById('stat-storage-total'),
 
     // Edit Modal Elements
@@ -146,6 +166,14 @@
     editFileMainCategory: document.getElementById('edit-file-main-category'),
     editFileSubcategorySelect: document.getElementById('edit-file-subcategory-select'),
     editFileSubcategoryCustom: document.getElementById('edit-file-subcategory-custom'),
+    editFileFontFamilyGroup: document.getElementById('edit-file-font-family-group'),
+    editFileFontFamilyInput: document.getElementById('edit-file-font-family-input'),
+    editFileLanguageGroup: document.getElementById('edit-file-language-group'),
+    editFileLanguageSelect: document.getElementById('edit-file-language-select'),
+    editFileLanguageCustom: document.getElementById('edit-file-language-custom'),
+    editFileBackgroundGroup: document.getElementById('edit-file-background-group'),
+    editFileOrientationSelect: document.getElementById('edit-file-orientation-select'),
+    editFileKeywordsInput: document.getElementById('edit-file-keywords-input'),
     editFilePricingSelect: document.getElementById('edit-file-pricing-select'),
     editFileFormatGroup: document.getElementById('edit-file-format-group'),
     editFileFormatSelect: document.getElementById('edit-file-format-select'),
@@ -311,6 +339,8 @@
       list = state.categoriesTree.font || DEFAULT_FONT_SUBCATEGORIES;
     } else if (mainCategory === 'sticker') {
       list = state.categoriesTree.sticker || DEFAULT_STICKER_CATEGORIES;
+    } else if (mainCategory === 'background') {
+      list = state.categoriesTree.background || DEFAULT_BACKGROUND_SUBCATEGORIES;
     }
 
     if (list && list.length > 0) {
@@ -349,7 +379,7 @@
     state.uploadMainCategory = mainCategory;
     elements.uploadMainCategory.value = mainCategory;
 
-    [elements.toggleCatImage, elements.toggleCatText, elements.toggleCatFont, elements.toggleCatSticker].forEach(btn => {
+    [elements.toggleCatImage, elements.toggleCatText, elements.toggleCatFont, elements.toggleCatSticker, elements.toggleCatBackground].forEach(btn => {
       if (btn) btn.classList.remove('active');
     });
 
@@ -365,6 +395,9 @@
     } else if (mainCategory === 'sticker') {
       if (elements.toggleCatSticker) elements.toggleCatSticker.classList.add('active');
       elements.subcategoryLabelHint.textContent = '(Select sticker style)';
+    } else if (mainCategory === 'background') {
+      if (elements.toggleCatBackground) elements.toggleCatBackground.classList.add('active');
+      elements.subcategoryLabelHint.textContent = '(Select background category e.g. Abstract)';
     }
 
     if (elements.stickerFormatOptionGroup) {
@@ -380,6 +413,22 @@
         elements.fontFamilyOptionGroup.classList.remove('hidden');
       } else {
         elements.fontFamilyOptionGroup.classList.add('hidden');
+      }
+    }
+
+    if (elements.fontLanguageOptionGroup) {
+      if (mainCategory === 'font') {
+        elements.fontLanguageOptionGroup.classList.remove('hidden');
+      } else {
+        elements.fontLanguageOptionGroup.classList.add('hidden');
+      }
+    }
+
+    if (elements.backgroundOptionGroup) {
+      if (mainCategory === 'background') {
+        elements.backgroundOptionGroup.classList.remove('hidden');
+      } else {
+        elements.backgroundOptionGroup.classList.add('hidden');
       }
     }
 
@@ -405,6 +454,14 @@
         pill.classList.remove('active');
       }
     });
+
+    if (elements.orientationFilterWrap) {
+      if (mainCategory === 'background' || mainCategory === 'all') {
+        elements.orientationFilterWrap.classList.remove('hidden');
+      } else {
+        elements.orientationFilterWrap.classList.add('hidden');
+      }
+    }
 
     updateSubcategoryFilterDropdown();
     fetchFilesList();
@@ -553,6 +610,16 @@
       const pricingVal = elements.uploadPricingSelect ? elements.uploadPricingSelect.value : 'Free';
       const formatVal = elements.uploadFormatSelect ? elements.uploadFormatSelect.value : 'PNG';
       const fontFamilyVal = elements.uploadFontFamilyInput ? elements.uploadFontFamilyInput.value.trim() : '';
+      let fontLanguageVal = 'English';
+      if (elements.uploadFontLanguageSelect) {
+        fontLanguageVal = elements.uploadFontLanguageSelect.value;
+        if (fontLanguageVal === '__custom__' && elements.uploadFontLanguageCustom) {
+          fontLanguageVal = elements.uploadFontLanguageCustom.value.trim() || 'English';
+        }
+      }
+
+      const bgOrientationVal = elements.uploadBgOrientationSelect ? elements.uploadBgOrientationSelect.value : 'portrait';
+      const bgKeywordsVal = elements.uploadBgKeywordsInput ? elements.uploadBgKeywordsInput.value.trim() : '';
 
       const formData = new FormData();
       formData.append('file', currentFile);
@@ -560,6 +627,9 @@
       formData.append('mainCategory', mainCategory);
       formData.append('subCategory', subCategory);
       formData.append('category', subCategory);
+      formData.append('language', fontLanguageVal);
+      formData.append('orientation', bgOrientationVal);
+      formData.append('keywords', bgKeywordsVal);
       formData.append('pricing', pricingVal);
       formData.append('isPremium', pricingVal === 'Paid' ? 'true' : 'false');
       formData.append('format', formatVal);
@@ -800,6 +870,12 @@
       if (state.selectedSubFilter && state.selectedSubFilter !== 'all') {
         url.searchParams.set('subCategory', state.selectedSubFilter);
       }
+      if (state.selectedLanguageFilter && state.selectedLanguageFilter !== 'all') {
+        url.searchParams.set('language', state.selectedLanguageFilter);
+      }
+      if (state.selectedOrientationFilter && state.selectedOrientationFilter !== 'all') {
+        url.searchParams.set('orientation', state.selectedOrientationFilter);
+      }
 
       const headers = {};
       if (state.apiKey) {
@@ -835,6 +911,7 @@
         let textCount = 0;
         let fontCount = 0;
         let stickerCount = 0;
+        let backgroundCount = 0;
         let totalStorageBytes = 0;
 
         files.forEach(f => {
@@ -843,6 +920,7 @@
           else if (cat === 'text') textCount++;
           else if (cat === 'font') fontCount++;
           else if (cat === 'sticker') stickerCount++;
+          else if (cat === 'background') backgroundCount++;
 
           totalStorageBytes += (f.size || f.fileSize || 0);
         });
@@ -852,6 +930,7 @@
         if (elements.statTextCount) elements.statTextCount.textContent = textCount;
         if (elements.statFontCount) elements.statFontCount.textContent = fontCount;
         if (elements.statStickerCount) elements.statStickerCount.textContent = stickerCount;
+        if (elements.statBackgroundCount) elements.statBackgroundCount.textContent = backgroundCount;
         if (elements.statStorageTotal) elements.statStorageTotal.textContent = formatBytes(totalStorageBytes);
       }
     } catch (err) {
@@ -866,6 +945,7 @@
     if (cat === 'text') return `<span class="badge badge-main-text">Text</span>`;
     if (cat === 'font') return `<span class="badge badge-main-font">Font</span>`;
     if (cat === 'sticker') return `<span class="badge badge-main-sticker">Sticker</span>`;
+    if (cat === 'background') return `<span class="badge badge-main-image" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #34d399;">Background</span>`;
     return `<span class="badge badge-main-image">${escapeHtml(cat)}</span>`;
   }
 
@@ -896,6 +976,9 @@
     const pricing = file.pricing || (file.isPremium ? 'Paid' : 'Free');
     const format = file.format || file.stickerFormat || (file.mimeType && file.mimeType.includes('svg') ? 'SVG' : 'PNG');
     const fontFamily = file.fontFamily || '';
+    const fontLanguage = file.language || 'English';
+    const orientation = file.orientation || '';
+    const keywords = file.keywords || [];
 
     let iconClass = 'icon-image';
     let svgIcon = '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline>';
@@ -908,6 +991,9 @@
     } else if (mainCat === 'sticker') {
       iconClass = 'icon-sticker';
       svgIcon = '<circle cx="12" cy="12" r="10"></circle><polygon points="12 8 15 15 9 15"></polygon>';
+    } else if (mainCat === 'background') {
+      iconClass = 'icon-image';
+      svgIcon = '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M3 9h18M9 21V9"></path>';
     }
 
     const mainBadge = getMainCategoryBadge(file.mainCategory);
@@ -916,6 +1002,15 @@
       : `<span class="badge badge-pricing-free">Free</span>`;
     const formatBadge = (mainCat === 'sticker') ? `<span class="badge badge-format">${escapeHtml(format)}</span>` : '';
     const familyBadge = (fontFamily) ? `<span class="badge badge-subtle" style="border-color: rgba(99, 102, 241, 0.35); color: #a5b4fc;" title="Font Family">Family: ${escapeHtml(fontFamily)}</span>` : '';
+    const langBadge = (mainCat === 'font' || fontLanguage !== 'English')
+      ? `<span class="badge badge-subtle" style="border-color: rgba(16, 185, 129, 0.35); color: #34d399;" title="Font Language">🌐 ${escapeHtml(fontLanguage)}</span>`
+      : '';
+    const oriBadge = (mainCat === 'background' || orientation)
+      ? `<span class="badge badge-subtle" style="border-color: rgba(245, 158, 11, 0.35); color: #fbbf24;" title="Orientation">📐 ${escapeHtml(orientation)}</span>`
+      : '';
+    const kwBadge = (keywords && keywords.length > 0)
+      ? `<span class="badge badge-subtle" style="border-color: rgba(168, 85, 247, 0.35); color: #c084fc;" title="Keywords: ${escapeHtml(keywords.join(', '))}">🏷️ ${escapeHtml(keywords.slice(0, 2).join(', '))}${keywords.length > 2 ? '...' : ''}</span>`
+      : '';
 
     card.innerHTML = `
       <div class="preset-card-header">
@@ -935,8 +1030,11 @@
 
       <div class="preset-card-meta">
         <span class="badge badge-subcategory">${escapeHtml(subCategory)}</span>
+        ${oriBadge}
+        ${langBadge}
         ${familyBadge}
         ${formatBadge}
+        ${kwBadge}
         <span class="preset-card-id">${escapeHtml(file.id)}</span>
         <span class="font-mono">${formatBytes(file.size)}</span>
       </div>
@@ -946,6 +1044,9 @@
           data-id="${escapeHtml(file.id)}" 
           data-title="${escapeHtml(file.title || file.originalName)}" 
           data-family="${escapeHtml(fontFamily)}"
+          data-lang="${escapeHtml(fontLanguage)}"
+          data-ori="${escapeHtml(orientation)}"
+          data-keywords="${escapeHtml(Array.isArray(keywords) ? keywords.join(', ') : keywords)}"
           data-main="${escapeHtml(file.mainCategory || 'image')}"
           data-sub="${escapeHtml(subCategory)}" 
           data-pricing="${escapeHtml(pricing)}"
@@ -1029,11 +1130,20 @@
       const pricing = file.pricing || (file.isPremium ? 'Paid' : 'Free');
       const format = file.format || file.stickerFormat || (file.mimeType && file.mimeType.includes('svg') ? 'SVG' : 'PNG');
       const fontFamily = file.fontFamily || '';
+      const fontLanguage = file.language || 'English';
+      const orientation = file.orientation || '';
+      const keywords = file.keywords || [];
       const formatBadge = (file.mainCategory === 'sticker')
         ? `<span class="badge badge-format">${escapeHtml(format)}</span>`
         : '';
       const familyBadge = (fontFamily)
         ? `<span class="badge badge-subtle" style="border-color: rgba(99, 102, 241, 0.35); color: #a5b4fc;">Family: ${escapeHtml(fontFamily)}</span>`
+        : '';
+      const langBadge = (file.mainCategory === 'font' || fontLanguage !== 'English')
+        ? `<span class="badge badge-subtle" style="border-color: rgba(16, 185, 129, 0.35); color: #34d399;">🌐 ${escapeHtml(fontLanguage)}</span>`
+        : '';
+      const oriBadge = (file.mainCategory === 'background' || orientation)
+        ? `<span class="badge badge-subtle" style="border-color: rgba(245, 158, 11, 0.35); color: #fbbf24;">📐 ${escapeHtml(orientation)}</span>`
         : '';
       const pricingBadge = (pricing === 'Paid' || pricing === 'paid' || file.isPremium)
         ? `<span class="badge badge-pricing-paid">Premium</span>`
@@ -1055,6 +1165,8 @@
         <td>${mainBadge}</td>
         <td>
           <span class="badge badge-subcategory">${escapeHtml(subCategory)}</span>
+          ${oriBadge}
+          ${langBadge}
           ${familyBadge}
           ${formatBadge}
           ${pricingBadge}
@@ -1068,6 +1180,9 @@
               data-id="${escapeHtml(file.id)}" 
               data-title="${escapeHtml(file.title || file.originalName)}" 
               data-family="${escapeHtml(fontFamily)}"
+              data-lang="${escapeHtml(fontLanguage)}"
+              data-ori="${escapeHtml(orientation)}"
+              data-keywords="${escapeHtml(Array.isArray(keywords) ? keywords.join(', ') : keywords)}"
               data-main="${escapeHtml(file.mainCategory || 'image')}"
               data-sub="${escapeHtml(subCategory)}" 
               data-pricing="${escapeHtml(pricing)}"
@@ -1106,6 +1221,9 @@
         const fileId = btn.getAttribute('data-id');
         const title = btn.getAttribute('data-title');
         const family = btn.getAttribute('data-family') || '';
+        const lang = btn.getAttribute('data-lang') || 'English';
+        const ori = btn.getAttribute('data-ori') || 'portrait';
+        const keywordsStr = btn.getAttribute('data-keywords') || '';
         const mainCat = btn.getAttribute('data-main') || 'image';
         const subCat = btn.getAttribute('data-sub') || 'General';
         const pricing = btn.getAttribute('data-pricing') || 'Free';
@@ -1133,6 +1251,38 @@
             if (elements.editFileFontFamilyInput) elements.editFileFontFamilyInput.value = family;
           } else {
             elements.editFileFontFamilyGroup.classList.add('hidden');
+          }
+        }
+
+        if (elements.editFileLanguageGroup) {
+          if (mainCat === 'font') {
+            elements.editFileLanguageGroup.classList.remove('hidden');
+            if (elements.editFileLanguageSelect) {
+              const opts = Array.from(elements.editFileLanguageSelect.options);
+              const match = opts.find(o => o.value.toLowerCase() === lang.toLowerCase());
+              if (match) {
+                elements.editFileLanguageSelect.value = match.value;
+                if (elements.editFileLanguageCustom) elements.editFileLanguageCustom.classList.add('hidden');
+              } else {
+                elements.editFileLanguageSelect.value = '__custom__';
+                if (elements.editFileLanguageCustom) {
+                  elements.editFileLanguageCustom.classList.remove('hidden');
+                  elements.editFileLanguageCustom.value = lang;
+                }
+              }
+            }
+          } else {
+            elements.editFileLanguageGroup.classList.add('hidden');
+          }
+        }
+
+        if (elements.editFileBackgroundGroup) {
+          if (mainCat === 'background') {
+            elements.editFileBackgroundGroup.classList.remove('hidden');
+            if (elements.editFileOrientationSelect) elements.editFileOrientationSelect.value = ori;
+            if (elements.editFileKeywordsInput) elements.editFileKeywordsInput.value = keywordsStr;
+          } else {
+            elements.editFileBackgroundGroup.classList.add('hidden');
           }
         }
 
@@ -1233,6 +1383,15 @@
     const newPricing = elements.editFilePricingSelect ? elements.editFilePricingSelect.value : 'Free';
     const newFormat = elements.editFileFormatSelect ? elements.editFileFormatSelect.value : 'PNG';
     const newFontFamily = elements.editFileFontFamilyInput ? elements.editFileFontFamilyInput.value.trim() : '';
+    let newLanguage = 'English';
+    if (elements.editFileLanguageSelect) {
+      newLanguage = elements.editFileLanguageSelect.value;
+      if (newLanguage === '__custom__' && elements.editFileLanguageCustom) {
+        newLanguage = elements.editFileLanguageCustom.value.trim() || 'English';
+      }
+    }
+    const newOrientation = elements.editFileOrientationSelect ? elements.editFileOrientationSelect.value : 'portrait';
+    const newKeywords = elements.editFileKeywordsInput ? elements.editFileKeywordsInput.value.trim() : '';
 
     try {
       const res = await fetch(`/api/presets/${fileId}`, {
@@ -1244,6 +1403,9 @@
         body: JSON.stringify({
           title: newTitle,
           fontFamily: newFontFamily,
+          language: newLanguage,
+          orientation: newOrientation,
+          keywords: newKeywords,
           mainCategory: newMain,
           subCategory: newSub,
           category: newSub,
@@ -1287,7 +1449,7 @@
     });
 
     // Stat Cards Click to Filter
-    ['image', 'text', 'font', 'sticker'].forEach(cat => {
+    ['image', 'text', 'font', 'sticker', 'background'].forEach(cat => {
       const el = document.getElementById(`stat-card-${cat}`);
       if (el) {
         el.addEventListener('click', () => {
@@ -1319,6 +1481,59 @@
     }
     if (elements.toggleCatSticker) {
       elements.toggleCatSticker.addEventListener('click', () => setUploadMainCategory('sticker'));
+    }
+    if (elements.toggleCatBackground) {
+      elements.toggleCatBackground.addEventListener('click', () => setUploadMainCategory('background'));
+    }
+
+    // Orientation Filter Change
+    if (elements.orientationFilterSelect) {
+      elements.orientationFilterSelect.addEventListener('change', (e) => {
+        state.selectedOrientationFilter = e.target.value;
+        state.currentPage = 1;
+        fetchFilesList();
+      });
+    }
+
+    // Upload Language Select Change
+    if (elements.uploadFontLanguageSelect) {
+      elements.uploadFontLanguageSelect.addEventListener('change', (e) => {
+        if (e.target.value === '__custom__') {
+          if (elements.uploadFontLanguageCustom) {
+            elements.uploadFontLanguageCustom.classList.remove('hidden');
+            elements.uploadFontLanguageCustom.focus();
+          }
+        } else {
+          if (elements.uploadFontLanguageCustom) {
+            elements.uploadFontLanguageCustom.classList.add('hidden');
+          }
+        }
+      });
+    }
+
+    // Edit Modal Language Select Change
+    if (elements.editFileLanguageSelect) {
+      elements.editFileLanguageSelect.addEventListener('change', (e) => {
+        if (e.target.value === '__custom__') {
+          if (elements.editFileLanguageCustom) {
+            elements.editFileLanguageCustom.classList.remove('hidden');
+            elements.editFileLanguageCustom.focus();
+          }
+        } else {
+          if (elements.editFileLanguageCustom) {
+            elements.editFileLanguageCustom.classList.add('hidden');
+          }
+        }
+      });
+    }
+
+    // Explorer Language Filter Change
+    if (elements.languageFilterSelect) {
+      elements.languageFilterSelect.addEventListener('change', (e) => {
+        state.selectedLanguageFilter = e.target.value;
+        state.currentPage = 1;
+        fetchFilesList();
+      });
     }
 
     // Custom Subcategory Select (Upload)

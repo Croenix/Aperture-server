@@ -81,6 +81,9 @@ router.post(
           {
             title: req.body.title,
             fontFamily: req.body.fontFamily || req.body.font_family || req.body.family,
+            language: req.body.language || req.body.lang,
+            orientation: req.body.orientation || req.body.aspectRatio,
+            keywords: req.body.keywords || req.body.tags,
             mainCategory: req.body.mainCategory || req.body.main_category,
             subCategory: req.body.subCategory || req.body.sub_category || req.body.category,
             category: req.body.subCategory || req.body.sub_category || req.body.category,
@@ -170,8 +173,8 @@ router.get(
   optionalAuth,
   async (req, res, next) => {
     try {
-      const { page, limit, search, category, mainCategory, subCategory, isPremium, pricing } = req.query;
-      const result = await fileService.listFiles({ page, limit, search, category, mainCategory, subCategory, isPremium, pricing }, req);
+      const { page, limit, search, category, mainCategory, subCategory, isPremium, pricing, language, lang, orientation, keyword, keywords } = req.query;
+      const result = await fileService.listFiles({ page, limit, search, category, mainCategory, subCategory, isPremium, pricing, language: language || lang, orientation, keyword: keyword || keywords }, req);
       return res.json({
         success: true,
         files: result.files,
@@ -271,11 +274,14 @@ router.get('/:id/view', (req, res, next) => {
 const handleUpdateFile = async (req, res, next) => {
   try {
     const fileId = req.params.id;
-    const { title, fontFamily, font_family, family, mainCategory, subCategory, category, isPremium, pricing, format, stickerFormat } = req.body;
+    const { title, fontFamily, font_family, family, language, lang, orientation, keywords, tags, mainCategory, subCategory, category, isPremium, pricing, format, stickerFormat } = req.body;
 
     const updated = await fileService.updateFile(fileId, {
       title,
       fontFamily: fontFamily || font_family || family,
+      language: language || lang,
+      orientation,
+      keywords: keywords || tags,
       mainCategory,
       subCategory: subCategory || category,
       category: subCategory || category,

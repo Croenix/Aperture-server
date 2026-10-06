@@ -61,6 +61,11 @@ Read-Only        aperture_ro_secret_key_2026      files:read
    - "PNG" (Raster image format with transparency)
    - "SVG" (Scalable Vector Graphics format)
 
+5. FONT LANGUAGES:
+   - Default: "English" (Applied automatically for existing and new fonts if unspecified)
+   - Pre-configured Options: "English", "Malayalam", "Tamil"
+   - Custom Languages: Support for uploading or editing fonts in any custom language (e.g. "Hindi", "Arabic", "Kannada", "Telugu")
+
 
 ================================================================================
 3. PRESET API ENDPOINTS (DEMO FEEDS & SCHEMAS)
@@ -668,17 +673,19 @@ Headers:
 
 Multipart Form-Data Fields:
   - file (or fontFile): Font binary file (.ttf, .otf, .woff, .woff2, .eot)
-  - name (or fontName / title): Display Name of the Font (e.g. "Roboto Bold", "Montserrat ExtraBold")
-  - fontFamily (or family): Font Family base name (Auto-detected from font title if left empty, e.g. "Roboto")
+  - name (or fontName / title): Display Name of the Font (e.g. "Manjari Bold", "Roboto Bold")
+  - fontFamily (or family): Font Family base name (Auto-detected from font title if left empty, e.g. "Manjari", "Roboto")
   - category (or subCategory / fontType): Font subcategory (Default: "Normal")
+  - language (or lang): Font Language (Default: "English", options: "English", "Malayalam", "Tamil", or custom string)
   - pricing (or isPremium): Access type ("Free" or "Paid")
 
 cURL Example:
   curl -X POST "https://aperture-server.onrender.com/api/fonts" \
     -H "Authorization: Bearer aperture_upl_secret_key_2026" \
-    -F "file=@/path/to/Roboto-Bold.ttf" \
-    -F "name=Roboto Bold" \
-    -F "fontFamily=Roboto" \
+    -F "file=@/path/to/Manjari-Bold.ttf" \
+    -F "name=Manjari Bold" \
+    -F "fontFamily=Manjari" \
+    -F "language=Malayalam" \
     -F "subCategory=Normal" \
     -F "pricing=Free"
 
@@ -688,9 +695,10 @@ Sample JSON Response:
   "message": "Font uploaded successfully.",
   "font": {
     "id": "f_9a81b2c3d4e5",
-    "name": "Roboto Bold",
-    "title": "Roboto Bold",
-    "fontFamily": "Roboto",
+    "name": "Manjari Bold",
+    "title": "Manjari Bold",
+    "fontFamily": "Manjari",
+    "language": "Malayalam",
     "mainCategory": "font",
     "subCategory": "Normal",
     "category": "Normal",
@@ -701,47 +709,52 @@ Sample JSON Response:
     "fileUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5",
     "downloadUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5/download",
     "viewUrl": "https://aperture-server.onrender.com/files/f_9a81b2c3d4e5/view",
-    "fileName": "Roboto-Bold.ttf",
+    "fileName": "Manjari-Bold.ttf",
     "fileSize": 165432,
     "sizeFormatted": "161.55 KB",
-    "uploadedAt": "2026-10-04T21:50:00.000Z"
+    "uploadedAt": "2026-10-06T21:50:00.000Z"
   }
 }
 
-7.2 GET ALL FONTS & FONT FAMILIES
+7.2 GET ALL FONTS & FONT FAMILIES (WITH LANGUAGE FILTERING)
 --------------------------------------------------------------------------------
 Endpoint:
   GET /api/fonts or GET /api/fonts/:subCategory
 
 Optional Query Parameters:
-  ?search=Roboto
-  ?fontFamily=Roboto
+  ?search=Manjari
+  ?language=Malayalam (or ?lang=Malayalam)
+  ?fontFamily=Manjari
   ?subCategory=Normal
   ?pricing=Free (or ?pricing=Paid)
   ?isPremium=false
 
-cURL Example:
+cURL Examples:
   curl -X GET "https://aperture-server.onrender.com/api/fonts"
+  curl -X GET "https://aperture-server.onrender.com/api/fonts?language=Malayalam"
 
-Sample JSON Response (With Font Family Hierarchy):
+Sample JSON Response (With Font Family & Language Breakdown):
 {
   "success": true,
   "mainCategory": "font",
   "count": 3,
   "fontFamilyCount": 1,
   "subCategories": [ "Normal" ],
+  "languages": [ "English", "Malayalam", "Tamil" ],
   "fontFamilies": [
     {
-      "fontFamily": "Roboto",
-      "name": "Roboto",
+      "fontFamily": "Manjari",
+      "name": "Manjari",
       "count": 3,
       "fonts": [
-        { "id": "f_111", "title": "Roboto Regular", "fontFamily": "Roboto" },
-        { "id": "f_222", "title": "Roboto Bold", "fontFamily": "Roboto" },
-        { "id": "f_333", "title": "Roboto Italic", "fontFamily": "Roboto" }
+        { "id": "f_111", "title": "Manjari Regular", "fontFamily": "Manjari", "language": "Malayalam" },
+        { "id": "f_222", "title": "Manjari Bold", "fontFamily": "Manjari", "language": "Malayalam" }
       ]
     }
   ],
+  "groupedByLanguage": {
+    "Malayalam": [ ... ]
+  },
   "fonts": [ ... ]
 }
 
@@ -753,7 +766,7 @@ Endpoint:
 
 cURL Examples:
   curl -X GET "https://aperture-server.onrender.com/api/fonts/families"
-  curl -X GET "https://aperture-server.onrender.com/api/fonts/family/Roboto"
+  curl -X GET "https://aperture-server.onrender.com/api/fonts/family/Manjari"
 
 7.4 GET FONT CATEGORIES
 --------------------------------------------------------------------------------
@@ -762,6 +775,48 @@ Endpoint:
 
 cURL Example:
   curl -X GET "https://aperture-server.onrender.com/api/fonts/categories"
+
+7.5 GET FONT LANGUAGES
+--------------------------------------------------------------------------------
+Endpoint:
+  GET /api/fonts/languages
+
+cURL Example:
+  curl -X GET "https://aperture-server.onrender.com/api/fonts/languages"
+
+Sample JSON Response:
+{
+  "success": true,
+  "languages": [
+    "English",
+    "Malayalam",
+    "Tamil"
+  ]
+}
+
+7.6 EDIT FONT METADATA (TITLE / FAMILY / LANGUAGE / CATEGORY)
+--------------------------------------------------------------------------------
+Endpoint:
+  PATCH /api/fonts/:id
+  PUT   /api/fonts/:id
+
+Headers:
+  Content-Type: application/json
+  Authorization: Bearer aperture_upl_secret_key_2026
+
+Request Body (JSON):
+{
+  "name": "Gayathri Regular",
+  "fontFamily": "Gayathri",
+  "language": "Malayalam",
+  "subCategory": "Normal"
+}
+
+cURL Example:
+  curl -X PATCH "https://aperture-server.onrender.com/api/fonts/f_9a81b2c3d4e5" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer aperture_upl_secret_key_2026" \
+    -d '{"language": "Malayalam", "fontFamily": "Gayathri"}'
 
 
 ================================================================================
@@ -843,6 +898,140 @@ Endpoint:
 
 cURL Example:
   curl -X GET "https://aperture-server.onrender.com/api/stickers/categories"
+
+
+================================================================================
+9. BACKGROUND API ENDPOINTS & SCHEMAS
+================================================================================
+
+9.1 UPLOAD BACKGROUND FILE
+--------------------------------------------------------------------------------
+Endpoint:
+  POST /api/backgrounds or POST /api/v1/backgrounds
+
+Headers:
+  Authorization: Bearer <API_KEY> (Optional if unauthenticated upload is allowed)
+
+Multipart Form-Data Fields:
+  - file (or backgroundFile): Image file (.jpg, .jpeg, .png, .webp, .svg, .avif)
+  - name (or title / backgroundTitle): Display Title (e.g. "Neon Cyber Abstract Grid")
+  - subCategory (or category): Background subcategory ("Abstract", "Nature", "Gradient", "Studio", "Textures", "Minimalist", "3D", "Urban", "Pattern")
+  - orientation: Display orientation ("portrait" or "landscape", Default: "portrait")
+  - pricing (or isPremium): Access pricing tier ("Free" or "Paid")
+  - keywords (or tags): Comma-separated string or array of search keywords/tags (e.g. "neon, abstract, wallpaper, dark") - max 20 keywords
+
+cURL Example:
+  curl -X POST "https://aperture-server.onrender.com/api/backgrounds" \
+    -H "Authorization: Bearer aperture_upl_secret_key_2026" \
+    -F "file=@/path/to/neon_grid.jpg" \
+    -F "name=Neon Cyber Abstract Grid" \
+    -F "subCategory=Abstract" \
+    -F "orientation=landscape" \
+    -F "pricing=Paid" \
+    -F "keywords=neon,cyber,abstract,grid,futuristic"
+
+Sample JSON Response:
+{
+  "success": true,
+  "message": "Background uploaded successfully.",
+  "background": {
+    "id": "f_e8d7c6b5a4f3",
+    "title": "Neon Cyber Abstract Grid",
+    "name": "Neon Cyber Abstract Grid",
+    "mainCategory": "background",
+    "subCategory": "Abstract",
+    "category": "Abstract",
+    "orientation": "landscape",
+    "keywords": [ "neon", "cyber", "abstract", "grid", "futuristic" ],
+    "isPremium": true,
+    "premium": "Yes",
+    "pricing": "Paid",
+    "backgroundUrl": "https://aperture-server.onrender.com/files/f_e8d7c6b5a4f3",
+    "fileUrl": "https://aperture-server.onrender.com/files/f_e8d7c6b5a4f3",
+    "downloadUrl": "https://aperture-server.onrender.com/files/f_e8d7c6b5a4f3/download",
+    "viewUrl": "https://aperture-server.onrender.com/files/f_e8d7c6b5a4f3/view",
+    "fileName": "neon_grid.jpg",
+    "mimeType": "image/jpeg",
+    "fileSize": 845120,
+    "sizeFormatted": "825.31 KB",
+    "uploadedAt": "2026-10-06T22:15:00.000Z"
+  }
+}
+
+9.2 GET ALL BACKGROUNDS (WITH ORIENTATION, KEYWORD & SEARCH FILTERING)
+--------------------------------------------------------------------------------
+Endpoint:
+  GET /api/backgrounds or GET /api/backgrounds/:subCategoryOrId
+
+Optional Query Parameters:
+  ?search=neon
+  ?subCategory=Abstract
+  ?orientation=landscape (or portrait)
+  ?keyword=cyber (or tag=cyber)
+  ?pricing=Free (or Paid)
+  ?isPremium=true (or false)
+
+cURL Examples:
+  curl -X GET "https://aperture-server.onrender.com/api/backgrounds"
+  curl -X GET "https://aperture-server.onrender.com/api/backgrounds?orientation=landscape&keyword=neon"
+  curl -X GET "https://aperture-server.onrender.com/api/backgrounds/Abstract"
+
+Sample JSON Response:
+{
+  "success": true,
+  "mainCategory": "background",
+  "count": 1,
+  "subCategories": [ "Abstract" ],
+  "orientations": [ "portrait", "landscape" ],
+  "groupedByOrientation": {
+    "landscape": [ ... ]
+  },
+  "backgrounds": [ ... ]
+}
+
+9.3 GET BACKGROUND CATEGORIES & ORIENTATIONS
+--------------------------------------------------------------------------------
+Endpoints:
+  GET /api/backgrounds/categories
+  GET /api/backgrounds/orientations
+
+cURL Examples:
+  curl -X GET "https://aperture-server.onrender.com/api/backgrounds/categories"
+  curl -X GET "https://aperture-server.onrender.com/api/backgrounds/orientations"
+
+9.4 EDIT BACKGROUND METADATA
+--------------------------------------------------------------------------------
+Endpoint:
+  PATCH /api/backgrounds/:id
+  PUT   /api/backgrounds/:id
+
+Headers:
+  Content-Type: application/json
+  Authorization: Bearer aperture_upl_secret_key_2026
+
+Request Body (JSON):
+{
+  "title": "Neon Grid FX",
+  "subCategory": "3D",
+  "orientation": "portrait",
+  "pricing": "Free",
+  "keywords": ["neon", "3d", "render"]
+}
+
+cURL Example:
+  curl -X PATCH "https://aperture-server.onrender.com/api/backgrounds/f_e8d7c6b5a4f3" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer aperture_upl_secret_key_2026" \
+    -d '{"orientation": "portrait", "subCategory": "3D"}'
+
+9.5 DELETE BACKGROUND
+--------------------------------------------------------------------------------
+Endpoint:
+  DELETE /api/backgrounds/:id
+
+cURL Example:
+  curl -X DELETE "https://aperture-server.onrender.com/api/backgrounds/f_e8d7c6b5a4f3" \
+    -H "Authorization: Bearer aperture_adm_secret_key_2026"
 
 
 ================================================================================

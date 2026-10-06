@@ -151,6 +151,19 @@
         </div>
       </div>
 
+      <div class="stat-card" id="stat-card-background" data-filter="background">
+        <div class="stat-icon icon-cyan">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M3 9h18M9 21V9"></path></svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Backgrounds</span>
+          <div class="stat-value-group">
+            <span class="stat-value" id="stat-background-count">0</span>
+            <span class="stat-subtext">Filter</span>
+          </div>
+        </div>
+      </div>
+
       <div class="stat-card" id="stat-card-storage">
         <div class="stat-icon icon-storage">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M21 19c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14"></path><path d="M21 5v14"></path></svg>
@@ -278,6 +291,10 @@
                       <svg class="icon tab-icon-sticker" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="12 8 15 15 9 15"></polygon></svg>
                       <span>Sticker</span>
                     </button>
+                    <button type="button" class="category-tab-btn" data-main-category="background" id="toggle-cat-background">
+                      <svg class="icon tab-icon-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M3 9h18M9 21V9"></path></svg>
+                      <span>Background</span>
+                    </button>
                   </div>
                   <input type="hidden" id="upload-main-category" value="image">
                 </div>
@@ -329,6 +346,47 @@
                     <span class="label-hint">(Auto-detected if left empty, e.g. Roboto)</span>
                   </label>
                   <input type="text" id="upload-font-family-input" class="form-input" placeholder="Auto-detect (e.g. Roboto)">
+                </div>
+
+                <!-- Font Language Option (English, Malayalam, Tamil, Custom) -->
+                <div class="form-group hidden" id="font-language-option-group">
+                  <label for="upload-font-language-select" class="input-label">
+                    <span>Font Language</span>
+                    <span class="label-hint">(Select or enter language)</span>
+                  </label>
+                  <div class="category-picker-row">
+                    <select id="upload-font-language-select" class="form-select">
+                      <option value="English">English</option>
+                      <option value="Malayalam">Malayalam</option>
+                      <option value="Tamil">Tamil</option>
+                      <option value="__custom__">+ Add Custom Language...</option>
+                    </select>
+                    <input type="text" id="upload-font-language-custom" class="form-input hidden" placeholder="Enter language name...">
+                  </div>
+                </div>
+
+                <!-- Background Options (Orientation & Keywords) -->
+                <div class="form-group hidden" id="background-option-group">
+                  <div class="form-row-2col">
+                    <div class="form-group">
+                      <label for="upload-bg-orientation-select" class="input-label">
+                        <span>Background Orientation</span>
+                        <span class="label-hint">(Aspect ratio)</span>
+                      </label>
+                      <select id="upload-bg-orientation-select" class="form-select">
+                        <option value="portrait">Portrait (Vertical)</option>
+                        <option value="landscape">Landscape (Horizontal)</option>
+                      </select>
+                    </div>
+
+                    <div class="form-group">
+                      <label for="upload-bg-keywords-input" class="input-label">
+                        <span>Keywords / Tags</span>
+                        <span class="label-hint">(Up to 20 comma-separated)</span>
+                      </label>
+                      <input type="text" id="upload-bg-keywords-input" class="form-input" placeholder="e.g. sunset, neon, dark, abstract">
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -553,6 +611,10 @@
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="12 8 15 15 9 15"></polygon></svg>
               <span>Stickers</span>
             </button>
+            <button type="button" class="category-pill" id="pill-cat-background" data-category="background">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M3 9h18M9 21V9"></path></svg>
+              <span>Backgrounds</span>
+            </button>
           </div>
 
           <!-- Controls Bar -->
@@ -563,11 +625,29 @@
               <option value="text">Text Presets</option>
               <option value="font">Fonts</option>
               <option value="sticker">Stickers</option>
+              <option value="background">Backgrounds</option>
             </select>
 
             <div class="filter-wrap">
               <select id="category-filter-select" class="form-select filter-select" aria-label="Filter by Subcategory">
                 <option value="all">All Subcategories</option>
+              </select>
+            </div>
+
+            <div class="filter-wrap" id="language-filter-wrap">
+              <select id="language-filter-select" class="form-select filter-select" aria-label="Filter by Language">
+                <option value="all">All Languages</option>
+                <option value="English">English</option>
+                <option value="Malayalam">Malayalam</option>
+                <option value="Tamil">Tamil</option>
+              </select>
+            </div>
+
+            <div class="filter-wrap hidden" id="orientation-filter-wrap">
+              <select id="orientation-filter-select" class="form-select filter-select" aria-label="Filter by Orientation">
+                <option value="all">All Orientations</option>
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
               </select>
             </div>
 
@@ -654,6 +734,7 @@
               <option value="text">Text Preset</option>
               <option value="font">Font</option>
               <option value="sticker">Sticker</option>
+              <option value="background">Background</option>
             </select>
           </div>
 
@@ -669,6 +750,35 @@
           <div class="form-group hidden" id="edit-file-font-family-group">
             <label for="edit-file-font-family-input" class="input-label">Font Family</label>
             <input type="text" id="edit-file-font-family-input" class="form-input" placeholder="e.g. Roboto">
+          </div>
+
+          <div class="form-group hidden" id="edit-file-language-group">
+            <label for="edit-file-language-select" class="input-label">Font Language</label>
+            <div class="category-picker-row">
+              <select id="edit-file-language-select" class="form-select">
+                <option value="English">English</option>
+                <option value="Malayalam">Malayalam</option>
+                <option value="Tamil">Tamil</option>
+                <option value="__custom__">+ Add Custom Language...</option>
+              </select>
+              <input type="text" id="edit-file-language-custom" class="form-input hidden" placeholder="Enter language name...">
+            </div>
+          </div>
+
+          <div class="form-group hidden" id="edit-file-background-group">
+            <div class="form-row-2col">
+              <div class="form-group">
+                <label for="edit-file-orientation-select" class="input-label">Orientation</label>
+                <select id="edit-file-orientation-select" class="form-select">
+                  <option value="portrait">Portrait (Vertical)</option>
+                  <option value="landscape">Landscape (Horizontal)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="edit-file-keywords-input" class="input-label">Keywords / Tags (Max 20)</label>
+                <input type="text" id="edit-file-keywords-input" class="form-input" placeholder="e.g. sunset, nature, dark">
+              </div>
+            </div>
           </div>
 
           <div class="form-row-2col">
