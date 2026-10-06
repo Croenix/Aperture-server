@@ -91,14 +91,33 @@ router.get('/categories', optionalAuth, async (req, res, next) => {
       ? dbCategories.hierarchy.text.map(x => x.subCategory).filter(Boolean)
       : [];
 
+    const dbBgSubs = (dbCategories && dbCategories.hierarchy && dbCategories.hierarchy.background)
+      ? dbCategories.hierarchy.background.map(x => x.subCategory).filter(Boolean)
+      : [];
+    const dbFontSubs = (dbCategories && dbCategories.hierarchy && dbCategories.hierarchy.font)
+      ? dbCategories.hierarchy.font.map(x => x.subCategory).filter(Boolean)
+      : [];
+    const dbStickerSubs = (dbCategories && dbCategories.hierarchy && dbCategories.hierarchy.sticker)
+      ? dbCategories.hierarchy.sticker.map(x => x.subCategory).filter(Boolean)
+      : [];
+
+    const DEFAULT_BG_SUBCATEGORIES = ['Abstract', 'Nature', 'Gradient', 'Studio', 'Textures', 'Minimalist', '3D', 'Urban', 'Pattern'];
+    const DEFAULT_STICKER_SUBCATEGORIES = ['Badges', 'Emoji', 'Decorative', 'Icons', 'Anime', 'Vectors'];
+
     const imageSet = new Set([...DEFAULT_IMAGE_SUBCATEGORIES, ...dbImgSubs]);
     const textSet = new Set(dbTextSubs);
+    const bgSet = new Set([...DEFAULT_BG_SUBCATEGORIES, ...dbBgSubs]);
+    const fontSet = new Set([...dbFontSubs, 'Normal']);
+    const stickerSet = new Set([...DEFAULT_STICKER_SUBCATEGORIES, ...dbStickerSubs]);
 
     return res.json({
       success: true,
       categories: {
         image: Array.from(imageSet),
         text: Array.from(textSet),
+        background: Array.from(bgSet),
+        font: Array.from(fontSet),
+        sticker: Array.from(stickerSet),
         all: dbCategories
       }
     });
