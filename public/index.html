@@ -365,28 +365,25 @@
                   </div>
                 </div>
 
-                <!-- Background Options (Orientation & Keywords) -->
-                <div class="form-group hidden" id="background-option-group">
-                  <div class="form-row-2col">
-                    <div class="form-group">
-                      <label for="upload-bg-orientation-select" class="input-label">
-                        <span>Background Orientation</span>
-                        <span class="label-hint">(Aspect ratio)</span>
-                      </label>
-                      <select id="upload-bg-orientation-select" class="form-select">
-                        <option value="portrait">Portrait (Vertical)</option>
-                        <option value="landscape">Landscape (Horizontal)</option>
-                      </select>
-                    </div>
+                <!-- Keywords / Tags Option (Image Presets, Backgrounds, Assets) -->
+                <div class="form-group" id="keywords-option-group">
+                  <label for="upload-bg-keywords-input" class="input-label">
+                    <span>Keywords / Tags</span>
+                    <span class="label-hint">(For search & indexing, comma-separated e.g. vintage, portrait, neon)</span>
+                  </label>
+                  <input type="text" id="upload-bg-keywords-input" class="form-input" placeholder="e.g. vintage, portrait, sunset, neon, dark, cinematic">
+                </div>
 
-                    <div class="form-group">
-                      <label for="upload-bg-keywords-input" class="input-label">
-                        <span>Keywords / Tags</span>
-                        <span class="label-hint">(Up to 20 comma-separated)</span>
-                      </label>
-                      <input type="text" id="upload-bg-keywords-input" class="form-input" placeholder="e.g. sunset, neon, dark, abstract">
-                    </div>
-                  </div>
+                <!-- Background Orientation Option -->
+                <div class="form-group hidden" id="background-option-group">
+                  <label for="upload-bg-orientation-select" class="input-label">
+                    <span>Background Orientation</span>
+                    <span class="label-hint">(Aspect ratio)</span>
+                  </label>
+                  <select id="upload-bg-orientation-select" class="form-select">
+                    <option value="portrait">Portrait (Vertical)</option>
+                    <option value="landscape">Landscape (Horizontal)</option>
+                  </select>
                 </div>
               </div>
 
@@ -765,20 +762,17 @@
             </div>
           </div>
 
+          <div class="form-group" id="edit-file-keywords-group">
+            <label for="edit-file-keywords-input" class="input-label">Keywords / Tags (Max 20, comma-separated)</label>
+            <input type="text" id="edit-file-keywords-input" class="form-input" placeholder="e.g. vintage, portrait, sunset, neon, dark">
+          </div>
+
           <div class="form-group hidden" id="edit-file-background-group">
-            <div class="form-row-2col">
-              <div class="form-group">
-                <label for="edit-file-orientation-select" class="input-label">Orientation</label>
-                <select id="edit-file-orientation-select" class="form-select">
-                  <option value="portrait">Portrait (Vertical)</option>
-                  <option value="landscape">Landscape (Horizontal)</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="edit-file-keywords-input" class="input-label">Keywords / Tags (Max 20)</label>
-                <input type="text" id="edit-file-keywords-input" class="form-input" placeholder="e.g. sunset, nature, dark">
-              </div>
-            </div>
+            <label for="edit-file-orientation-select" class="input-label">Background Orientation</label>
+            <select id="edit-file-orientation-select" class="form-select">
+              <option value="portrait">Portrait (Vertical)</option>
+              <option value="landscape">Landscape (Horizontal)</option>
+            </select>
           </div>
 
           <div class="form-row-2col">

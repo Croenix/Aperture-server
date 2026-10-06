@@ -37,10 +37,11 @@ Read-Only        aperture_ro_secret_key_2026      files:read
 ================================================================================
 
 1. MAIN CATEGORIES:
-   - "image"   (Image Presets / LUTs / Lightroom Profiles)
-   - "text"    (Text Presets / Captions / Quotes)
-   - "font"    (Typography & Custom Fonts)
-   - "sticker" (Graphics, Badges & Icons)
+   - "image"      (Image Presets / LUTs / Lightroom Profiles)
+   - "text"       (Text Presets / Captions / Quotes)
+   - "font"       (Typography & Custom Fonts)
+   - "sticker"    (Graphics, Badges & Icons)
+   - "background" (Background Wallpapers & Backdrops)
 
 2. SUB CATEGORIES:
    - Image Preset Defaults:
@@ -52,6 +53,8 @@ Read-Only        aperture_ro_secret_key_2026      files:read
      "Normal" + Custom
    - Sticker Defaults:
      "Badges", "Emoji", "Decorative", "Icons", "Anime", "Logos", "Vectors", "Labels", "Illustrations" + Custom
+   - Background Defaults:
+     "Abstract", "Nature", "Gradient", "Studio", "Textures", "Minimalist", "3D", "Urban", "Pattern" + Custom
 
 3. PRICING & ACCESS TYPES:
    - "Free" (isPremium: false)
@@ -65,6 +68,13 @@ Read-Only        aperture_ro_secret_key_2026      files:read
    - Default: "English" (Applied automatically for existing and new fonts if unspecified)
    - Pre-configured Options: "English", "Malayalam", "Tamil"
    - Custom Languages: Support for uploading or editing fonts in any custom language (e.g. "Hindi", "Arabic", "Kannada", "Telugu")
+
+6. BACKGROUND ORIENTATIONS:
+   - "portrait"  (Vertical aspect ratio for mobile screens / stories)
+   - "landscape" (Horizontal aspect ratio for desktop / wide screens)
+
+7. KEYWORDS & TAGS:
+   - Up to 20 tags per image / background asset for search & indexing (e.g. ["vintage", "portrait", "neon", "cyber", "dark"])
 
 
 ================================================================================
@@ -80,11 +90,12 @@ Endpoint:
 Optional Query Parameters:
   ?search=sunset
   ?subCategory=Vintage
+  ?keyword=portrait
   ?pricing=Free (or ?pricing=Paid)
   ?isPremium=false (or ?isPremium=true)
 
 cURL Example:
-  curl -X GET "https://aperture-server.onrender.com/api/presets/image"
+  curl -X GET "https://aperture-server.onrender.com/api/presets/image?subCategory=Vintage&pricing=Free&keyword=portrait"
 
 Sample JSON Response Feed:
 {
@@ -102,6 +113,7 @@ Sample JSON Response Feed:
       "mainCategory": "image",
       "subCategory": "Vintage",
       "category": "Vintage",
+      "keywords": [ "vintage", "portrait", "warm" ],
       "isPremium": false,
       "premium": "No",
       "pricing": "Free",
@@ -119,6 +131,7 @@ Sample JSON Response Feed:
       "mainCategory": "image",
       "subCategory": "Cinematic",
       "category": "Cinematic",
+      "keywords": [ "moody", "forest", "glow", "cinematic" ],
       "isPremium": true,
       "premium": "Yes",
       "pricing": "Paid",
@@ -376,6 +389,7 @@ Request Body (JSON):
   "title": "Vintage Sunset Glow",
   "mainCategory": "image",
   "subCategory": "Vintage",
+  "keywords": ["vintage", "portrait", "sunset"],
   "pricing": "Paid",
   "isPremium": true
 }
@@ -384,7 +398,7 @@ cURL Example:
   curl -X PATCH "https://aperture-server.onrender.com/api/presets/f_c11d0a6c3916" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer aperture_upl_secret_key_2026" \
-    -d '{"title": "Vintage Sunset Glow", "mainCategory": "image", "subCategory": "Vintage", "pricing": "Paid", "isPremium": true}'
+    -d '{"title": "Vintage Sunset Glow", "mainCategory": "image", "subCategory": "Vintage", "keywords": ["vintage", "portrait", "sunset"], "pricing": "Paid", "isPremium": true}'
 
 Sample JSON Response Feed:
 {
@@ -396,6 +410,7 @@ Sample JSON Response Feed:
     "mainCategory": "image",
     "subCategory": "Vintage",
     "category": "Vintage",
+    "keywords": [ "vintage", "portrait", "sunset" ],
     "isPremium": true,
     "premium": "Yes",
     "pricing": "Paid",
@@ -444,8 +459,11 @@ Headers:
 Form-Data Parameters:
   - file (Required): Binary file (up to 100 MB)
   - title (Optional): Custom display title (e.g. "Amber Sunset")
-  - mainCategory (Optional): "image", "text", "font", or "sticker" (Default: "image")
-  - subCategory (Optional): Subcategory name (e.g. "Vintage", "Quotes", "Normal", "Badges")
+  - mainCategory (Optional): "image", "text", "font", "sticker", or "background" (Default: "image")
+  - subCategory (Optional): Subcategory name (e.g. "Vintage", "Quotes", "Normal", "Badges", "Abstract")
+  - language (Optional): Font language (Default: "English", options: "English", "Malayalam", "Tamil", custom)
+  - orientation (Optional): Background orientation ("portrait" or "landscape", Default: "portrait")
+  - keywords (Optional): Comma-separated search keywords/tags for images & backgrounds (max 20 tags)
   - pricing (Optional): "Free" or "Paid" (Default: "Free")
   - isPremium (Optional): "true" or "false" (Default: "false")
   - format / stickerFormat (Optional): "PNG" or "SVG" (Applicable for stickers)
@@ -457,6 +475,7 @@ cURL Example:
     -F "title=Amber Sunset" \
     -F "mainCategory=image" \
     -F "subCategory=Vintage" \
+    -F "keywords=vintage, portrait, sunset" \
     -F "pricing=Free"
 
 Sample JSON Response Feed:
@@ -532,8 +551,11 @@ Query Parameters:
   - page (Default: 1)
   - limit (Default: 20, Max: 1000)
   - search (Optional text search)
-  - mainCategory (Optional: "image", "text", "font", "sticker")
+  - mainCategory (Optional: "image", "text", "font", "sticker", "background")
   - subCategory (Optional subcategory filter)
+  - language (Optional font language filter: "English", "Malayalam", "Tamil", etc.)
+  - orientation (Optional background orientation filter: "portrait" or "landscape")
+  - keyword (Optional background tag filter)
   - pricing (Optional: "Free" or "Paid")
   - isPremium (Optional: "true" or "false")
 
@@ -580,17 +602,27 @@ async function getStickers(category = 'Badges', format = 'SVG') {
   return data.stickers;
 }
 
-// 4. Upload a File / Preset / Sticker / Font
-async function uploadFile(fileObject, title, mainCategory, subCategory, pricing, format, apiKey) {
+// 4. Fetch Backgrounds (Filter by orientation & keyword)
+async function getBackgrounds(orientation = 'landscape', keyword = 'neon') {
+  const url = `https://aperture-server.onrender.com/api/backgrounds?orientation=${orientation}&keyword=${encodeURIComponent(keyword)}`;
+  const response = await fetch(url);
+  const data = await response.json();
+  console.log('Backgrounds:', data.backgrounds);
+  return data.backgrounds;
+}
+
+// 5. Upload a File / Preset / Sticker / Font / Background
+async function uploadFile(fileObject, title, mainCategory, subCategory, pricing, extraOptions = {}, apiKey) {
   const formData = new FormData();
   formData.append('file', fileObject);
   formData.append('title', title);
-  formData.append('mainCategory', mainCategory); // 'image', 'text', 'font', or 'sticker'
+  formData.append('mainCategory', mainCategory); // 'image', 'text', 'font', 'sticker', 'background'
   formData.append('subCategory', subCategory);
   formData.append('pricing', pricing); // 'Free' or 'Paid'
-  if (format) {
-    formData.append('format', format); // 'PNG' or 'SVG' (For stickers)
-  }
+  if (extraOptions.format) formData.append('format', extraOptions.format);
+  if (extraOptions.language) formData.append('language', extraOptions.language);
+  if (extraOptions.orientation) formData.append('orientation', extraOptions.orientation);
+  if (extraOptions.keywords) formData.append('keywords', extraOptions.keywords);
 
   const response = await fetch('https://aperture-server.onrender.com/api/v1/files', {
     method: 'POST',

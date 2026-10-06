@@ -60,6 +60,8 @@ function toCleanPreset(file, reqOrBase = null) {
   const mainCategory = file.mainCategory || file.main_category || 'image';
   const subCategory = file.subCategory || file.sub_category || file.category || 'general';
   const presetTitle = formatTitle(file.title || file.originalName, file.originalName);
+  const isPremium = Boolean(file.isPremium || file.is_premium || file.pricing === 'Paid' || file.pricing === 'paid');
+  const keywords = Array.isArray(file.keywords) ? file.keywords : [];
 
   return {
     id: file.id,
@@ -67,10 +69,13 @@ function toCleanPreset(file, reqOrBase = null) {
     name: presetTitle,
     language: file.language || 'English',
     orientation: file.orientation || null,
-    keywords: file.keywords || [],
+    keywords: keywords,
     mainCategory: mainCategory,
     subCategory: subCategory,
     category: subCategory,
+    isPremium: isPremium,
+    premium: isPremium ? 'Yes' : 'No',
+    pricing: file.pricing || (isPremium ? 'Paid' : 'Free'),
     fileUrl: file.directUrl || file.fileUrl || `${base}/files/${file.id}`,
     downloadUrl: `${base}/files/${file.id}/download`,
     viewUrl: file.directUrl || file.viewUrl || `${base}/files/${file.id}/view`,
@@ -129,14 +134,18 @@ router.get('/categories', optionalAuth, async (req, res, next) => {
 const handleImagePresets = async (req, res, next) => {
   try {
     const subCategory = req.params.subCategory || req.query.subCategory || req.query.category;
-    const { search } = req.query;
+    const { search, pricing, isPremium, keyword, keywords, orientation } = req.query;
 
     const result = await fileService.listFiles({
       page: 1,
       limit: 1000,
       search,
       mainCategory: 'image',
-      subCategory: subCategory || ''
+      subCategory: subCategory || '',
+      pricing,
+      isPremium,
+      keyword: keyword || keywords,
+      orientation
     }, req);
 
     const presets = result.files.map(p => toCleanPreset(p, req));
@@ -278,7 +287,11 @@ router.post(
           {
             title: formatTitle(rawName, pFile.originalname),
             mainCategory,
-            subCategory
+            subCategory,
+            keywords: req.body.keywords || req.body.tags,
+            pricing: req.body.pricing,
+            isPremium: req.body.isPremium || req.body.is_premium,
+            orientation: req.body.orientation
           },
           req.apiKeyInfo,
           req
@@ -358,12 +371,16 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
 const handleUpdatePreset = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, mainCategory, subCategory, category } = req.body;
+    const { title, mainCategory, subCategory, category, keywords, pricing, isPremium, orientation } = req.body;
     const updated = await fileService.updateFile(id, {
       title,
       mainCategory,
       subCategory: subCategory || category,
-      category: subCategory || category
+      category: subCategory || category,
+      keywords,
+      pricing,
+      isPremium,
+      orientation
     }, req);
 
     return res.json({

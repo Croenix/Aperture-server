@@ -82,6 +82,7 @@
     uploadFontLanguageSelect: document.getElementById('upload-font-language-select'),
     uploadFontLanguageCustom: document.getElementById('upload-font-language-custom'),
     backgroundOptionGroup: document.getElementById('background-option-group'),
+    keywordsOptionGroup: document.getElementById('keywords-option-group'),
     uploadBgOrientationSelect: document.getElementById('upload-bg-orientation-select'),
     uploadBgKeywordsInput: document.getElementById('upload-bg-keywords-input'),
     toggleCatImage: document.getElementById('toggle-cat-image'),
@@ -172,6 +173,7 @@
     editFileLanguageSelect: document.getElementById('edit-file-language-select'),
     editFileLanguageCustom: document.getElementById('edit-file-language-custom'),
     editFileBackgroundGroup: document.getElementById('edit-file-background-group'),
+    editFileKeywordsGroup: document.getElementById('edit-file-keywords-group'),
     editFileOrientationSelect: document.getElementById('edit-file-orientation-select'),
     editFileKeywordsInput: document.getElementById('edit-file-keywords-input'),
     editFilePricingSelect: document.getElementById('edit-file-pricing-select'),
@@ -430,6 +432,10 @@
       } else {
         elements.backgroundOptionGroup.classList.add('hidden');
       }
+    }
+
+    if (elements.keywordsOptionGroup) {
+      elements.keywordsOptionGroup.classList.remove('hidden');
     }
 
     populateSubcategorySelect(elements.customSubcategorySelect, elements.customSubcategoryInput, mainCategory);
@@ -1280,10 +1286,16 @@
           if (mainCat === 'background') {
             elements.editFileBackgroundGroup.classList.remove('hidden');
             if (elements.editFileOrientationSelect) elements.editFileOrientationSelect.value = ori;
-            if (elements.editFileKeywordsInput) elements.editFileKeywordsInput.value = keywordsStr;
           } else {
             elements.editFileBackgroundGroup.classList.add('hidden');
           }
+        }
+
+        if (elements.editFileKeywordsGroup) {
+          elements.editFileKeywordsGroup.classList.remove('hidden');
+        }
+        if (elements.editFileKeywordsInput) {
+          elements.editFileKeywordsInput.value = keywordsStr;
         }
 
         populateSubcategorySelect(elements.editFileSubcategorySelect, elements.editFileSubcategoryCustom, mainCat, subCat);
