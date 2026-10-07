@@ -72,7 +72,79 @@ if (!fs.existsSync(dbDir)) {
 }
 const db = new Database(config.databasePath);
 db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
 db.pragma('foreign_keys = ON');
+db.pragma('cache_size = -64000');
+db.pragma('mmap_size = 268435456');
+db.pragma('temp_store = MEMORY');
+
+// Pre-compiled statement handles
+let stmtGetFileById;
+let stmtGetApiKey;
+let stmtUpdateApiKeyUsage;
+let stmtSoftDelete;
+let stmtHardDelete;
+let stmtListCategories;
+let stmtListFontLanguages;
+let stmtListApiKeys;
+let stmtDeleteApiKey;
+let stmtInsertApiKey;
+let stmtCreateFile;
+
+function initPreparedStatements() {
+  stmtGetFileById = db.prepare('SELECT * FROM files WHERE id = ? AND is_deleted = 0');
+  stmtGetApiKey = db.prepare('SELECT * FROM api_keys WHERE key = ? AND is_active = 1');
+  stmtUpdateApiKeyUsage = db.prepare('UPDATE api_keys SET last_used_at = ? WHERE key = ?');
+  stmtSoftDelete = db.prepare('UPDATE files SET is_deleted = 1 WHERE id = ?');
+  stmtHardDelete = db.prepare('DELETE FROM files WHERE id = ?');
+  stmtListCategories = db.prepare(`
+    SELECT main_category, sub_category, COUNT(*) as count 
+    FROM files 
+    WHERE is_deleted = 0 
+    GROUP BY main_category, sub_category 
+    ORDER BY main_category ASC, count DESC, sub_category ASC
+  `);
+  stmtListFontLanguages = db.prepare(`SELECT DISTINCT language FROM files WHERE is_deleted = 0 AND main_category = 'font'`);
+  stmtListApiKeys = db.prepare('SELECT key, name, permissions, created_at, last_used_at, is_active FROM api_keys ORDER BY created_at DESC');
+  stmtDeleteApiKey = db.prepare('DELETE FROM api_keys WHERE key = ?');
+  stmtInsertApiKey = db.prepare('INSERT INTO api_keys (key, name, permissions, created_at, is_active) VALUES (?, ?, ?, ?, 1)');
+  stmtCreateFile = db.prepare(`
+    INSERT OR REPLACE INTO files (
+      id, original_name, filename, title, font_family, language, orientation, keywords, main_category, sub_category, category, format, mime_type, size,
+      storage_provider, storage_path, direct_url, storage_metadata, is_premium,
+      uploaded_at, created_by, is_deleted
+    ) VALUES (
+      @id, @originalName, @filename, @title, @fontFamily, @language, @orientation, @keywordsStr, @mainCategory, @subCategory, @category, @format, @mimeType, @size,
+      @storageProvider, @storagePath, @directUrl, @storageMetadata, @isPremium,
+      @uploadedAt, @createdBy, 0
+    )
+  `);
+}
+
+// In-Memory RAM Caches
+const apiKeyCache = new Map();
+const API_KEY_CACHE_TTL = 60 * 1000;
+
+let categoryCache = null;
+let categoryCacheExpiry = 0;
+
+let fontLangCache = null;
+let fontLangCacheExpiry = 0;
+
+function invalidateMetadataCache() {
+  categoryCache = null;
+  categoryCacheExpiry = 0;
+  fontLangCache = null;
+  fontLangCacheExpiry = 0;
+}
+
+function clearApiKeyCache(key = null) {
+  if (key) {
+    apiKeyCache.delete(key);
+  } else {
+    apiKeyCache.clear();
+  }
+}
 
 function initSqliteSchema() {
   db.exec(`
@@ -109,6 +181,14 @@ function initSqliteSchema() {
       last_used_at TEXT,
       is_active INTEGER NOT NULL DEFAULT 1
     );
+
+    CREATE INDEX IF NOT EXISTS idx_files_is_deleted_uploaded ON files (is_deleted, uploaded_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_files_main_sub ON files (is_deleted, main_category, sub_category);
+    CREATE INDEX IF NOT EXISTS idx_files_main_lang ON files (is_deleted, main_category, language);
+    CREATE INDEX IF NOT EXISTS idx_files_main_ori ON files (is_deleted, main_category, orientation);
+    CREATE INDEX IF NOT EXISTS idx_files_is_premium ON files (is_deleted, is_premium);
+    CREATE INDEX IF NOT EXISTS idx_files_font_family ON files (is_deleted, font_family);
+    CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys (key, is_active);
   `);
 
   // Migration check: Ensure missing columns are added if an existing sqlite DB was initialized with an older schema
@@ -139,6 +219,7 @@ function initSqliteSchema() {
     }
   }
 
+  initPreparedStatements();
   seedSqliteApiKeys();
 }
 
@@ -224,7 +305,7 @@ function escapeRegex(str) {
 }
 
 function isMongoActive() {
-  return Boolean(config.mongodbUri) && (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2);
+  return Boolean(config.mongodbUri) && mongoose.connection.readyState === 1;
 }
 
 initSqliteSchema();
@@ -349,39 +430,28 @@ const dbOperations = {
       }
     }
 
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO files (
-        id, original_name, filename, title, font_family, language, orientation, keywords, main_category, sub_category, category, format, mime_type, size,
-        storage_provider, storage_path, direct_url, storage_metadata, is_premium,
-        uploaded_at, created_by, is_deleted
-      ) VALUES (
-        @id, @originalName, @filename, @title, @fontFamily, @language, @orientation, @keywordsStr, @mainCategory, @subCategory, @category, @format, @mimeType, @size,
-        @storageProvider, @storagePath, @directUrl, @storageMetadata, @isPremium,
-        @uploadedAt, @createdBy, 0
-      )
-    `);
-
-    stmt.run({
+    stmtCreateFile.run({
       ...recordData,
       keywordsStr: JSON.stringify(keywordsVal),
       isPremium: isPrem ? 1 : 0,
       storageMetadata: recordData.storageMetadata ? JSON.stringify(recordData.storageMetadata) : null
     });
 
+    invalidateMetadataCache();
     return await this.getFileById(fileRecord.id);
   },
 
   async getFileById(id) {
+    if (!id) return null;
     if (isMongoActive()) {
       try {
-        const doc = await FileModel.findOne({ id, isDeleted: false });
+        const doc = await FileModel.findOne({ id, isDeleted: false }).lean();
         if (doc) return _mapRecord(doc);
       } catch (err) {
         console.warn('⚠️ MongoDB getFileById failed, falling back to SQLite:', err.message);
       }
     }
-    const stmt = db.prepare(`SELECT * FROM files WHERE id = ? AND is_deleted = 0`);
-    const row = stmt.get(id);
+    const row = stmtGetFileById.get(id);
     if (row) return _mapRecord(row);
     return null;
   },
@@ -449,7 +519,7 @@ const dbOperations = {
 
         const skip = Math.max(0, (page - 1) * limit);
         const total = await FileModel.countDocuments(query);
-        const docs = await FileModel.find(query).sort({ uploadedAt: -1 }).skip(skip).limit(limit);
+        const docs = await FileModel.find(query).sort({ uploadedAt: -1 }).skip(skip).limit(limit).lean();
 
         return {
           files: docs.map(d => _mapRecord(d)),
@@ -547,6 +617,12 @@ const dbOperations = {
   },
 
   async listCategories() {
+    const now = Date.now();
+    if (categoryCache && now < categoryCacheExpiry) {
+      return categoryCache;
+    }
+
+    let result;
     if (isMongoActive()) {
       try {
         const docs = await FileModel.aggregate([
@@ -566,48 +642,60 @@ const dbOperations = {
           raw.push({ main_category: main, sub_category: sub, count: d.count });
         });
 
-        return { raw, hierarchy };
+        result = { raw, hierarchy };
       } catch (err) {
         console.warn('⚠️ MongoDB listCategories failed, falling back to SQLite:', err.message);
       }
     }
 
-    const stmt = db.prepare(`
-      SELECT main_category, sub_category, COUNT(*) as count 
-      FROM files 
-      WHERE is_deleted = 0 
-      GROUP BY main_category, sub_category 
-      ORDER BY main_category ASC, count DESC, sub_category ASC
-    `);
-    const rows = stmt.all();
-    const hierarchy = { image: [], text: [], font: [], sticker: [] };
-    rows.forEach(r => {
-      const main = r.main_category || 'image';
-      if (!hierarchy[main]) hierarchy[main] = [];
-      hierarchy[main].push({ subCategory: r.sub_category, count: r.count });
-    });
-    return { raw: rows, hierarchy };
+    if (!result) {
+      const rows = stmtListCategories.all();
+      const hierarchy = { image: [], text: [], font: [], sticker: [] };
+      rows.forEach(r => {
+        const main = r.main_category || 'image';
+        if (!hierarchy[main]) hierarchy[main] = [];
+        hierarchy[main].push({ subCategory: r.sub_category, count: r.count });
+      });
+      result = { raw: rows, hierarchy };
+    }
+
+    categoryCache = result;
+    categoryCacheExpiry = now + 15000; // Cache for 15s
+    return result;
   },
 
   async listFontLanguages() {
+    const now = Date.now();
+    if (fontLangCache && now < fontLangCacheExpiry) {
+      return fontLangCache;
+    }
+
     const defaultLangs = ['English', 'Malayalam', 'Tamil'];
+    let result;
+
     if (isMongoActive()) {
       try {
         const distincts = await FileModel.distinct('language', { isDeleted: false, mainCategory: 'font' });
         const set = new Set([...defaultLangs, ...(distincts || []).filter(Boolean)]);
-        return Array.from(set);
+        result = Array.from(set);
       } catch (err) {
         console.warn('⚠️ MongoDB listFontLanguages failed, falling back to SQLite:', err.message);
       }
     }
 
-    try {
-      const rows = db.prepare(`SELECT DISTINCT language FROM files WHERE is_deleted = 0 AND main_category = 'font'`).all();
-      const set = new Set([...defaultLangs, ...rows.map(r => r.language).filter(Boolean)]);
-      return Array.from(set);
-    } catch (err) {
-      return defaultLangs;
+    if (!result) {
+      try {
+        const rows = stmtListFontLanguages.all();
+        const set = new Set([...defaultLangs, ...rows.map(r => r.language).filter(Boolean)]);
+        result = Array.from(set);
+      } catch (err) {
+        result = defaultLangs;
+      }
     }
+
+    fontLangCache = result;
+    fontLangCacheExpiry = now + 15000; // Cache for 15s
+    return result;
   },
 
   async updateFile(id, updates = {}) {
@@ -656,7 +744,6 @@ const dbOperations = {
       params.push(updates.title.trim());
       mongoUpdates.title = updates.title.trim();
       
-      // Auto-rederive fontFamily if title updated and fontFamily not explicitly given
       if (!targetFontFamily) {
         const existing = await this.getFileById(id);
         if (existing && existing.mainCategory === 'font') {
@@ -714,6 +801,7 @@ const dbOperations = {
       db.prepare(sql).run(...params);
     }
 
+    invalidateMetadataCache();
     return await this.getFileById(id);
   },
 
@@ -725,8 +813,9 @@ const dbOperations = {
         console.warn('⚠️ MongoDB softDeleteFile failed:', err.message);
       }
     }
-    const stmt = db.prepare('UPDATE files SET is_deleted = 1 WHERE id = ?');
-    return stmt.run(id).changes > 0;
+    const res = stmtSoftDelete.run(id).changes > 0;
+    invalidateMetadataCache();
+    return res;
   },
 
   async hardDeleteFile(id) {
@@ -737,17 +826,24 @@ const dbOperations = {
         console.warn('⚠️ MongoDB hardDeleteFile failed:', err.message);
       }
     }
-    const stmt = db.prepare('DELETE FROM files WHERE id = ?');
-    return stmt.run(id).changes > 0;
+    const res = stmtHardDelete.run(id).changes > 0;
+    invalidateMetadataCache();
+    return res;
   },
 
   async getApiKey(key) {
     if (!key) return null;
+    const now = Date.now();
+    const cached = apiKeyCache.get(key);
+    if (cached && (now - cached.timestamp < API_KEY_CACHE_TTL)) {
+      return cached.data;
+    }
+
     if (isMongoActive()) {
       try {
-        const doc = await ApiKeyModel.findOne({ key, isActive: true });
+        const doc = await ApiKeyModel.findOne({ key, isActive: true }).lean();
         if (doc) {
-          return {
+          const res = {
             key: doc.key,
             name: doc.name,
             permissions: doc.permissions,
@@ -755,16 +851,20 @@ const dbOperations = {
             lastUsedAt: doc.lastUsedAt,
             isActive: doc.isActive
           };
+          apiKeyCache.set(key, { data: res, timestamp: now });
+          return res;
         }
       } catch (err) {
         console.warn('⚠️ MongoDB getApiKey failed, falling back to SQLite:', err.message);
       }
     }
 
-    const stmt = db.prepare('SELECT * FROM api_keys WHERE key = ? AND is_active = 1');
-    const row = stmt.get(key);
-    if (!row) return null;
-    return {
+    const row = stmtGetApiKey.get(key);
+    if (!row) {
+      apiKeyCache.delete(key);
+      return null;
+    }
+    const res = {
       key: row.key,
       name: row.name,
       permissions: row.permissions.split(',').map(p => p.trim()),
@@ -772,23 +872,28 @@ const dbOperations = {
       lastUsedAt: row.last_used_at,
       isActive: Boolean(row.is_active)
     };
+    apiKeyCache.set(key, { data: res, timestamp: now });
+    return res;
   },
 
   async updateApiKeyUsage(key) {
-    const now = new Date().toISOString();
-    if (isMongoActive()) {
+    const nowStr = new Date().toISOString();
+    setImmediate(async () => {
+      if (isMongoActive()) {
+        try {
+          await ApiKeyModel.updateOne({ key }, { $set: { lastUsedAt: nowStr } });
+        } catch (err) {}
+      }
       try {
-        await ApiKeyModel.updateOne({ key }, { $set: { lastUsedAt: now } });
+        stmtUpdateApiKeyUsage.run(nowStr, key);
       } catch (err) {}
-    }
-    const stmt = db.prepare('UPDATE api_keys SET last_used_at = ? WHERE key = ?');
-    stmt.run(now, key);
+    });
   },
 
   async listApiKeys() {
     if (isMongoActive()) {
       try {
-        const docs = await ApiKeyModel.find({}).sort({ createdAt: -1 });
+        const docs = await ApiKeyModel.find({}).sort({ createdAt: -1 }).lean();
         return docs.map(d => ({
           key: d.key,
           name: d.name,
@@ -802,8 +907,7 @@ const dbOperations = {
       }
     }
 
-    const stmt = db.prepare('SELECT key, name, permissions, created_at, last_used_at, is_active FROM api_keys ORDER BY created_at DESC');
-    const rows = stmt.all();
+    const rows = stmtListApiKeys.all();
     return rows.map(r => ({
       key: r.key,
       name: r.name,
@@ -815,17 +919,14 @@ const dbOperations = {
   },
 
   async createApiKey({ key, name, permissions }) {
-    const now = new Date().toISOString();
+    const nowStr = new Date().toISOString();
     if (isMongoActive()) {
       try {
-        await ApiKeyModel.create({ key, name, permissions, createdAt: now, isActive: true });
+        await ApiKeyModel.create({ key, name, permissions, createdAt: nowStr, isActive: true });
       } catch (err) {}
     }
-    const stmt = db.prepare(`
-      INSERT INTO api_keys (key, name, permissions, created_at, is_active)
-      VALUES (?, ?, ?, ?, 1)
-    `);
-    stmt.run(key, name, permissions.join(','), now);
+    stmtInsertApiKey.run(key, name, permissions.join(','), nowStr);
+    clearApiKeyCache();
     return await this.getApiKey(key);
   },
 
@@ -835,8 +936,9 @@ const dbOperations = {
         await ApiKeyModel.deleteOne({ key });
       } catch (err) {}
     }
-    const stmt = db.prepare('DELETE FROM api_keys WHERE key = ?');
-    return stmt.run(key).changes > 0;
+    const res = stmtDeleteApiKey.run(key).changes > 0;
+    clearApiKeyCache(key);
+    return res;
   }
 };
 

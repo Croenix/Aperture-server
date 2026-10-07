@@ -15,10 +15,78 @@ const keysRouter = require('./routes/keys');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { requestLogger } = require('./middleware/loggerMiddleware');
 
+const zlib = require('zlib');
+
 const app = express();
 
 // Trust reverse proxies (e.g. Nginx, Cloudflare, Heroku, Traefik, Caddy)
 app.set('trust proxy', true);
+
+// Zero-dependency Native HTTP Response Compression Middleware (Gzip & Brotli)
+app.use((req, res, next) => {
+  const acceptEncoding = req.headers['accept-encoding'] || '';
+  if (!acceptEncoding.includes('gzip') && !acceptEncoding.includes('deflate') && !acceptEncoding.includes('br')) {
+    return next();
+  }
+
+  const originalWrite = res.write;
+  const originalEnd = res.end;
+  let stream = null;
+  let encoding = null;
+  let initialized = false;
+  let isCompressible = false;
+
+  function initStream() {
+    if (initialized) return;
+    initialized = true;
+
+    const contentType = res.getHeader('Content-Type') || '';
+    isCompressible = typeof contentType === 'string' && (
+      contentType.includes('json') ||
+      contentType.includes('text') ||
+      contentType.includes('javascript') ||
+      contentType.includes('xml') ||
+      contentType.includes('svg')
+    );
+
+    if (!isCompressible) return;
+
+    if (acceptEncoding.includes('br') && zlib.createBrotliCompress) {
+      encoding = 'br';
+      stream = zlib.createBrotliCompress({ params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } });
+    } else if (acceptEncoding.includes('gzip')) {
+      encoding = 'gzip';
+      stream = zlib.createGzip({ level: 6 });
+    } else if (acceptEncoding.includes('deflate')) {
+      encoding = 'deflate';
+      stream = zlib.createDeflate({ level: 6 });
+    }
+
+    if (stream) {
+      res.setHeader('Content-Encoding', encoding);
+      res.removeHeader('Content-Length');
+      stream.on('data', (chunk) => originalWrite.call(res, chunk));
+      stream.on('end', () => originalEnd.call(res));
+    }
+  }
+
+  res.write = function (chunk, enc, cb) {
+    initStream();
+    if (stream) return stream.write(chunk, enc, cb);
+    return originalWrite.call(res, chunk, enc, cb);
+  };
+
+  res.end = function (chunk, enc, cb) {
+    initStream();
+    if (stream) {
+      if (chunk) stream.write(chunk, enc);
+      return stream.end(cb);
+    }
+    return originalEnd.call(res, chunk, enc, cb);
+  };
+
+  next();
+});
 
 // Request Debug Logging Middleware
 app.use(requestLogger);
@@ -79,8 +147,8 @@ const apiLimiter = rateLimit({
 // Serve Favicon (avoid 404 console errors)
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// Serve Static Frontend UI
-app.use(express.static(path.join(__dirname, '../public')));
+// Serve Static Frontend UI with caching
+app.use(express.static(path.join(__dirname, '../public'), { maxAge: '1d', etag: true }));
 
 // Public File Access Endpoints (spec: /files/f_8a72c91e4f2b)
 app.get('/files/:id', (req, res, next) => {

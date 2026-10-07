@@ -222,6 +222,7 @@ async function streamFileResponse(req, res, next, isDownload) {
     const disposition = isDownload ? 'attachment' : 'inline';
     const originalName = encodeURIComponent(fileRecord.originalName);
 
+    res.setHeader('Cache-Control', 'public, max-age=86400');
     res.setHeader('Content-Type', fileRecord.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `${disposition}; filename="${fileRecord.originalName}"; filename*=UTF-8''${originalName}`);
     res.setHeader('Accept-Ranges', 'bytes');
@@ -235,7 +236,7 @@ async function streamFileResponse(req, res, next, isDownload) {
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
-      if (start >= fileSize || end >= fileSize || start > end) {
+      if (isNaN(start) || start >= fileSize || end >= fileSize || start > end) {
         res.setHeader('Content-Range', `bytes */${fileSize}`);
         return res.status(416).json({
           success: false,
@@ -252,11 +253,13 @@ async function streamFileResponse(req, res, next, isDownload) {
       res.status(206);
       res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
       res.setHeader('Content-Length', chunkSize);
+      stream.on('error', (err) => next(err));
       return stream.pipe(res);
     }
 
     res.setHeader('Content-Length', fileSize);
     const { stream } = await fileService.getFileStream(fileId);
+    stream.on('error', (err) => next(err));
     stream.pipe(res);
   } catch (err) {
     next(err);
